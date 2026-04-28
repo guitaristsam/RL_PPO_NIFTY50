@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR NESTLEIND
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,841.52
+Final Portfolio Value: ₹11,059.79
+Total Return: 12.38%
+Annualized Return: 5.31%
+Volatility (Annualized): 8.91%
+Sharpe Ratio: 0.597
+Maximum Drawdown: -6.95%
+Trading Days: 568
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,841.52
+Final Portfolio Value: ₹12,950.63
+Total Return: 31.59%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 12.38%
+Buy & Hold Return: 31.59%
+Outperformance: -19.21%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 62
+Buy Trades: 32
+Sell Trades: 30
+Total Transaction Costs: ₹1,221.18
+Average Cost per Trade: ₹19.70
+
+🎯 TRADING ACCURACY:
+Winning Trades: 21
+Losing Trades: 9
+Win Rate: 70.00%
+Total Closed Trades: 30

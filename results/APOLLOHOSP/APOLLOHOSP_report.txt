@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR APOLLOHOSP
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,160.98
+Total Return: 31.61%
+Annualized Return: 7.36%
+Volatility (Annualized): 15.25%
+Sharpe Ratio: 0.482
+Maximum Drawdown: -18.82%
+Trading Days: 975
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹16,490.65
+Total Return: 64.91%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 31.61%
+Buy & Hold Return: 64.91%
+Outperformance: -33.30%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 70
+Buy Trades: 36
+Sell Trades: 34
+Total Transaction Costs: ₹1,420.12
+Average Cost per Trade: ₹20.29
+
+🎯 TRADING ACCURACY:
+Winning Trades: 26
+Losing Trades: 8
+Win Rate: 76.47%
+Total Closed Trades: 34

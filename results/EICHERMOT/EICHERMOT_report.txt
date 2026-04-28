@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR EICHERMOT
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,005.23
+Final Portfolio Value: ₹14,820.98
+Total Return: 48.13%
+Annualized Return: 10.69%
+Volatility (Annualized): 18.79%
+Sharpe Ratio: 0.569
+Maximum Drawdown: -21.98%
+Trading Days: 975
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,005.23
+Final Portfolio Value: ₹19,163.63
+Total Return: 91.54%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 48.13%
+Buy & Hold Return: 91.54%
+Outperformance: -43.40%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 81
+Buy Trades: 42
+Sell Trades: 39
+Total Transaction Costs: ₹1,903.32
+Average Cost per Trade: ₹23.50
+
+🎯 TRADING ACCURACY:
+Winning Trades: 31
+Losing Trades: 8
+Win Rate: 79.49%
+Total Closed Trades: 39

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR BHARTIARTL
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,777.95
+Total Return: -2.22%
+Annualized Return: -0.65%
+Volatility (Annualized): 11.06%
+Sharpe Ratio: -0.059
+Maximum Drawdown: -20.50%
+Trading Days: 862
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹28,107.56
+Total Return: 181.08%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -2.22%
+Buy & Hold Return: 181.08%
+Outperformance: -183.30%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 99
+Buy Trades: 50
+Sell Trades: 49
+Total Transaction Costs: ₹938.40
+Average Cost per Trade: ₹9.48
+
+🎯 TRADING ACCURACY:
+Winning Trades: 26
+Losing Trades: 23
+Win Rate: 53.06%
+Total Closed Trades: 49

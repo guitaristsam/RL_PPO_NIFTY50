@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR SBILIFE
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,962.01
+Final Portfolio Value: ₹10,413.81
+Total Return: 4.54%
+Annualized Return: 4.06%
+Volatility (Annualized): 20.87%
+Sharpe Ratio: 0.194
+Maximum Drawdown: -26.09%
+Trading Days: 281
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,962.01
+Final Portfolio Value: ₹12,395.91
+Total Return: 24.43%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 4.54%
+Buy & Hold Return: 24.43%
+Outperformance: -19.90%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 38
+Buy Trades: 20
+Sell Trades: 18
+Total Transaction Costs: ₹762.19
+Average Cost per Trade: ₹20.06
+
+🎯 TRADING ACCURACY:
+Winning Trades: 15
+Losing Trades: 3
+Win Rate: 83.33%
+Total Closed Trades: 18

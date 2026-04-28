@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR WIPRO
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,136.21
+Final Portfolio Value: ₹11,663.12
+Total Return: 15.06%
+Annualized Return: 3.29%
+Volatility (Annualized): 25.70%
+Sharpe Ratio: 0.128
+Maximum Drawdown: -50.13%
+Trading Days: 1093
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,136.21
+Final Portfolio Value: ₹12,576.15
+Total Return: 24.07%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 15.06%
+Buy & Hold Return: 24.07%
+Outperformance: -9.01%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 17
+Buy Trades: 11
+Sell Trades: 6
+Total Transaction Costs: ₹346.41
+Average Cost per Trade: ₹20.38
+
+🎯 TRADING ACCURACY:
+Winning Trades: 4
+Losing Trades: 2
+Win Rate: 66.67%
+Total Closed Trades: 6

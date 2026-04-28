@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR CIPLA
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,001.80
+Final Portfolio Value: ₹16,442.13
+Total Return: 64.39%
+Annualized Return: 13.69%
+Volatility (Annualized): 18.65%
+Sharpe Ratio: 0.734
+Maximum Drawdown: -23.21%
+Trading Days: 976
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,001.80
+Final Portfolio Value: ₹15,511.47
+Total Return: 55.09%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 64.39%
+Buy & Hold Return: 55.09%
+Outperformance: 9.30%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 139
+Buy Trades: 70
+Sell Trades: 69
+Total Transaction Costs: ₹3,739.77
+Average Cost per Trade: ₹26.90
+
+🎯 TRADING ACCURACY:
+Winning Trades: 55
+Losing Trades: 14
+Win Rate: 79.71%
+Total Closed Trades: 69

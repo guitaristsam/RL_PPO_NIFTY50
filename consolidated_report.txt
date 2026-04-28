@@ -1,0 +1,250 @@
+
+================================================================================
+PORTFOLIO PERFORMANCE REPORT (NIFTY50 STOCKS)
+================================================================================
+
+Stocks Processed: 38 out of 50
+Initial Investment: ₹380,000.00
+Final Portfolio Value: ₹491,385.05
+Buy & Hold Value: ₹692,847.35
+Total Transaction Costs: ₹58,185.16
+
+Portfolio Return: 29.31%
+Buy & Hold Return: 82.33%
+Outperformance: -53.02%
+
+Overall Win Rate: 65.87%
+Total Closed Trades: 1424
+Winning Trades: 938
+Losing Trades: 486
+
+Per Stock Results:
+--------------------------------------------------
+DRREDDY:
+  Final Value: ₹8,780.19
+  Buy&Hold: ₹12,380.28
+  Win Rate: 70.59%
+  Transaction Costs: ₹1,952.47
+
+EICHERMOT:
+  Final Value: ₹14,820.98
+  Buy&Hold: ₹19,163.63
+  Win Rate: 79.49%
+  Transaction Costs: ₹1,903.32
+
+ETERNAL:
+  Final Value: ₹10,718.20
+  Buy&Hold: ₹8,732.99
+  Win Rate: 75.00%
+  Transaction Costs: ₹500.17
+
+GRASIM:
+  Final Value: ₹11,899.10
+  Buy&Hold: ₹17,768.01
+  Win Rate: 46.67%
+  Transaction Costs: ₹1,437.04
+
+HCLTECH:
+  Final Value: ₹8,218.02
+  Buy&Hold: ₹13,040.55
+  Win Rate: 69.57%
+  Transaction Costs: ₹1,941.68
+
+HDFCBANK:
+  Final Value: ₹7,542.03
+  Buy&Hold: ₹13,061.78
+  Win Rate: 63.64%
+  Transaction Costs: ₹1,595.52
+
+HDFCLIFE:
+  Final Value: ₹10,793.44
+  Buy&Hold: ₹14,077.36
+  Win Rate: 62.50%
+  Transaction Costs: ₹636.61
+
+HEROMOTOCO:
+  Final Value: ₹9,539.64
+  Buy&Hold: ₹14,575.21
+  Win Rate: 61.22%
+  Transaction Costs: ₹1,612.71
+
+HINDALCO:
+  Final Value: ₹9,008.42
+  Buy&Hold: ₹27,796.15
+  Win Rate: 40.00%
+  Transaction Costs: ₹1,542.68
+
+HINDUNILVR:
+  Final Value: ₹9,631.44
+  Buy&Hold: ₹9,948.54
+  Win Rate: 67.57%
+  Transaction Costs: ₹1,751.21
+
+ICICIBANK:
+  Final Value: ₹14,414.64
+  Buy&Hold: ₹22,342.79
+  Win Rate: 82.05%
+  Transaction Costs: ₹1,470.41
+
+INDUSINDBK:
+  Final Value: ₹9,873.02
+  Buy&Hold: ₹8,607.09
+  Win Rate: 36.36%
+  Transaction Costs: ₹1,460.38
+
+INFY:
+  Final Value: ₹6,135.43
+  Buy&Hold: ₹12,447.81
+  Win Rate: 75.00%
+  Transaction Costs: ₹3,641.52
+
+ITC:
+  Final Value: ₹24,597.47
+  Buy&Hold: ₹20,587.76
+  Win Rate: 83.33%
+  Transaction Costs: ₹4,257.81
+
+JIOFIN:
+  Final Value: ₹10,458.31
+  Buy&Hold: ₹14,680.44
+  Win Rate: 100.00%
+  Transaction Costs: ₹88.25
+
+JSWSTEEL:
+  Final Value: ₹15,429.20
+  Buy&Hold: ₹17,445.03
+  Win Rate: 71.43%
+  Transaction Costs: ₹2,883.35
+
+KOTAKBANK:
+  Final Value: ₹10,994.49
+  Buy&Hold: ₹12,032.72
+  Win Rate: 70.37%
+  Transaction Costs: ₹953.51
+
+LT:
+  Final Value: ₹20,495.90
+  Buy&Hold: ₹22,495.87
+  Win Rate: 50.00%
+  Transaction Costs: ₹1,286.65
+
+M&M:
+  Final Value: ₹10,421.54
+  Buy&Hold: ₹22,968.21
+  Win Rate: 53.85%
+  Transaction Costs: ₹500.76
+
+MARUTI:
+  Final Value: ₹12,802.29
+  Buy&Hold: ₹14,891.91
+  Win Rate: 78.26%
+  Transaction Costs: ₹1,267.11
+
+NESTLEIND:
+  Final Value: ₹11,059.79
+  Buy&Hold: ₹12,950.63
+  Win Rate: 70.00%
+  Transaction Costs: ₹1,221.18
+
+NTPC:
+  Final Value: ₹9,846.94
+  Buy&Hold: ₹21,145.92
+  Win Rate: 71.43%
+  Transaction Costs: ₹1,076.51
+
+ONGC:
+  Final Value: ₹22,396.50
+  Buy&Hold: ₹21,069.72
+  Win Rate: 100.00%
+  Transaction Costs: ₹969.50
+
+POWERGRID:
+  Final Value: ₹12,373.53
+  Buy&Hold: ₹18,236.26
+  Win Rate: 90.48%
+  Transaction Costs: ₹781.34
+
+RELIANCE:
+  Final Value: ₹13,201.20
+  Buy&Hold: ₹16,902.57
+  Win Rate: 60.71%
+  Transaction Costs: ₹2,886.45
+
+SBILIFE:
+  Final Value: ₹10,413.81
+  Buy&Hold: ₹12,395.91
+  Win Rate: 83.33%
+  Transaction Costs: ₹762.19
+
+SBIN:
+  Final Value: ₹7,503.26
+  Buy&Hold: ₹18,300.64
+  Win Rate: 67.95%
+  Transaction Costs: ₹2,610.74
+
+SHRIRAMFIN:
+  Final Value: ₹26,273.28
+  Buy&Hold: ₹26,234.65
+  Win Rate: 0.00%
+  Transaction Costs: ₹24.85
+
+SUNPHARMA:
+  Final Value: ₹13,019.09
+  Buy&Hold: ₹24,019.40
+  Win Rate: 62.86%
+  Transaction Costs: ₹1,637.76
+
+TATACONSUM:
+  Final Value: ₹9,442.66
+  Buy&Hold: ₹13,870.86
+  Win Rate: 71.11%
+  Transaction Costs: ₹1,861.34
+
+TATAMOTORS:
+  Final Value: ₹33,245.91
+  Buy&Hold: ₹35,676.68
+  Win Rate: 26.32%
+  Transaction Costs: ₹1,993.64
+
+TATASTEEL:
+  Final Value: ₹20,548.00
+  Buy&Hold: ₹25,232.61
+  Win Rate: 63.41%
+  Transaction Costs: ₹2,565.63
+
+TCS:
+  Final Value: ₹9,933.71
+  Buy&Hold: ₹10,813.70
+  Win Rate: 66.67%
+  Transaction Costs: ₹1,658.18
+
+TECHM:
+  Final Value: ₹8,379.62
+  Buy&Hold: ₹14,355.58
+  Win Rate: 54.55%
+  Transaction Costs: ₹1,065.93
+
+TITAN:
+  Final Value: ₹13,005.95
+  Buy&Hold: ₹19,781.11
+  Win Rate: 41.94%
+  Transaction Costs: ₹1,639.86
+
+TRENT:
+  Final Value: ₹13,005.08
+  Buy&Hold: ₹54,084.09
+  Win Rate: 64.52%
+  Transaction Costs: ₹1,318.77
+
+ULTRACEMCO:
+  Final Value: ₹9,499.85
+  Buy&Hold: ₹16,156.76
+  Win Rate: 60.71%
+  Transaction Costs: ₹1,081.70
+
+WIPRO:
+  Final Value: ₹11,663.12
+  Buy&Hold: ₹12,576.15
+  Win Rate: 66.67%
+  Transaction Costs: ₹346.41
+

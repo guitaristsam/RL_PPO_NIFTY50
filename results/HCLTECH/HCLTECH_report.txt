@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR HCLTECH
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹8,218.02
+Total Return: -17.82%
+Annualized Return: -5.14%
+Volatility (Annualized): 9.93%
+Sharpe Ratio: -0.518
+Maximum Drawdown: -29.62%
+Trading Days: 937
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,040.55
+Total Return: 30.41%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -17.82%
+Buy & Hold Return: 30.41%
+Outperformance: -48.23%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 94
+Buy Trades: 48
+Sell Trades: 46
+Total Transaction Costs: ₹1,941.68
+Average Cost per Trade: ₹20.66
+
+🎯 TRADING ACCURACY:
+Winning Trades: 32
+Losing Trades: 14
+Win Rate: 69.57%
+Total Closed Trades: 46

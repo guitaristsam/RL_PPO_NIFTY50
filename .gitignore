@@ -1,0 +1,23 @@
+# Trained artifacts (regenerable, large)
+models/
+runs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Project-specific scratch
+.claude/
+iteration_logs/
+progress.md
+
+# OS
+.DS_Store
+Thumbs.db

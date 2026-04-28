@@ -1,0 +1,2 @@
+trade_id,date,symbol,action,quantity,price,transaction_cost,total_value,portfolio_value,position_before,position_after
+1,2021-09-02,SHRIRAMFIN,Buy,37,268.61,24.846425,9938.57,10026.953575,0,37

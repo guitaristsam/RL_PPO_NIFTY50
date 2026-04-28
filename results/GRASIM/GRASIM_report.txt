@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR GRASIM
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,981.33
+Final Portfolio Value: ₹11,899.10
+Total Return: 19.21%
+Annualized Return: 4.64%
+Volatility (Annualized): 19.95%
+Sharpe Ratio: 0.233
+Maximum Drawdown: -28.99%
+Trading Days: 976
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,981.33
+Final Portfolio Value: ₹17,768.01
+Total Return: 78.01%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 19.21%
+Buy & Hold Return: 78.01%
+Outperformance: -58.80%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 98
+Buy Trades: 53
+Sell Trades: 45
+Total Transaction Costs: ₹1,437.04
+Average Cost per Trade: ₹14.66
+
+🎯 TRADING ACCURACY:
+Winning Trades: 21
+Losing Trades: 24
+Win Rate: 46.67%
+Total Closed Trades: 45

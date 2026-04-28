@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR JIOFIN
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,076.60
+Final Portfolio Value: ₹10,458.31
+Total Return: 3.79%
+Annualized Return: 16.04%
+Volatility (Annualized): 17.90%
+Sharpe Ratio: 0.896
+Maximum Drawdown: -7.24%
+Trading Days: 63
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,076.60
+Final Portfolio Value: ₹14,680.44
+Total Return: 45.69%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 3.79%
+Buy & Hold Return: 45.69%
+Outperformance: -41.90%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 6
+Buy Trades: 3
+Sell Trades: 3
+Total Transaction Costs: ₹88.25
+Average Cost per Trade: ₹14.71
+
+🎯 TRADING ACCURACY:
+Winning Trades: 3
+Losing Trades: 0
+Win Rate: 100.00%
+Total Closed Trades: 3

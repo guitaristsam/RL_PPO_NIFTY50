@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR HINDUNILVR
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,845.70
+Final Portfolio Value: ₹9,631.44
+Total Return: -2.18%
+Annualized Return: -0.51%
+Volatility (Annualized): 17.46%
+Sharpe Ratio: -0.029
+Maximum Drawdown: -29.92%
+Trading Days: 1089
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,845.70
+Final Portfolio Value: ₹9,948.54
+Total Return: 1.04%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -2.18%
+Buy & Hold Return: 1.04%
+Outperformance: -3.22%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 75
+Buy Trades: 38
+Sell Trades: 37
+Total Transaction Costs: ₹1,751.21
+Average Cost per Trade: ₹23.35
+
+🎯 TRADING ACCURACY:
+Winning Trades: 25
+Losing Trades: 12
+Win Rate: 67.57%
+Total Closed Trades: 37

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR ULTRACEMCO
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,499.85
+Total Return: -5.00%
+Annualized Return: -1.67%
+Volatility (Annualized): 7.40%
+Sharpe Ratio: -0.226
+Maximum Drawdown: -11.89%
+Trading Days: 767
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹16,156.76
+Total Return: 61.57%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -5.00%
+Buy & Hold Return: 61.57%
+Outperformance: -66.57%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 56
+Buy Trades: 28
+Sell Trades: 28
+Total Transaction Costs: ₹1,081.70
+Average Cost per Trade: ₹19.32
+
+🎯 TRADING ACCURACY:
+Winning Trades: 17
+Losing Trades: 11
+Win Rate: 60.71%
+Total Closed Trades: 28

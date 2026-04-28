@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR HEROMOTOCO
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,539.64
+Total Return: -4.60%
+Annualized Return: -1.39%
+Volatility (Annualized): 16.44%
+Sharpe Ratio: -0.085
+Maximum Drawdown: -38.57%
+Trading Days: 848
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,575.21
+Total Return: 45.75%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -4.60%
+Buy & Hold Return: 45.75%
+Outperformance: -50.36%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 98
+Buy Trades: 49
+Sell Trades: 49
+Total Transaction Costs: ₹1,612.71
+Average Cost per Trade: ₹16.46
+
+🎯 TRADING ACCURACY:
+Winning Trades: 30
+Losing Trades: 19
+Win Rate: 61.22%
+Total Closed Trades: 49

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR COALINDIA
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,719.35
+Total Return: -2.81%
+Annualized Return: -1.33%
+Volatility (Annualized): 10.52%
+Sharpe Ratio: -0.126
+Maximum Drawdown: -23.79%
+Trading Days: 537
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹16,506.82
+Total Return: 65.07%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -2.81%
+Buy & Hold Return: 65.07%
+Outperformance: -67.87%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 38
+Buy Trades: 19
+Sell Trades: 19
+Total Transaction Costs: ₹414.85
+Average Cost per Trade: ₹10.92
+
+🎯 TRADING ACCURACY:
+Winning Trades: 15
+Losing Trades: 4
+Win Rate: 78.95%
+Total Closed Trades: 19

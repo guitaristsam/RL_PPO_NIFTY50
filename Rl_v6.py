@@ -1,0 +1,1051 @@
+import os
+# Memory / thread caps — must be set BEFORE numpy / torch / TF import.
+# Heavy multi-threaded BLAS + multi-process pandas_ta workers were each
+# re-importing numpy/pandas/TF and busting the Windows page file.
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "1")
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "1")
+
+import glob
+import time
+import random
+import sys
+import warnings
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+import numpy as np
+import pandas as pd
+import pandas_ta as ta
+import torch
+torch.set_num_threads(1)
+try:
+    torch.set_num_interop_threads(1)
+except RuntimeError:
+    # set_num_interop_threads must be called before any parallel work; ignore if too late.
+    pass
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+from datetime import datetime
+from tqdm import tqdm
+from typing import Optional, Dict, List
+from dataclasses import dataclass
+from sklearn.preprocessing import RobustScaler
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import BaseCallback
+from torch.utils.tensorboard import SummaryWriter
+from gymnasium import spaces
+import gymnasium as gym
+from gymnasium import spaces
+from finrl.meta.env_stock_trading.env_stocktrading import StockTradingEnv
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Configuration
+TRAINED_MODEL_DIR = "models"
+RESULTS_DIR = "results"
+CONSOLIDATED_REPORT = "consolidated_report.txt"
+NIFTY50_PATH = r"C:\Users\sambh\OneDrive\Desktop\Nifty50OHLCV" + "\\"
+MIN_DATA_ROWS = 252  # Minimum 1 year of data after cleaning
+
+# Create directories if they don't exist
+os.makedirs(TRAINED_MODEL_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+# Your specific list of indicators
+list_of_indicators = [
+    'ABER_ATR_5_15','AD','ADOSC_3_10','ADX_14','DMP_14','DMN_14','AMATe_LR_8_21_2','AMATe_SR_8_21_2',
+    'AOBV_LR_2','AOBV_SR_2','APO_12_26','AROOND_14','AROONU_14','AROONOSC_14','ATRr_14','BBB_5_2.0',
+    'BBP_5_2.0','BIAS_SMA_26','BOP','AR_26','BR_26','CCI_14_0.015','CDL_DOJI_10_0.1','CDL_INSIDE',
+    'open_Z_30_1','high_Z_30_1','low_Z_30_1','close_Z_30_1','CFO_9','CG_10','CMF_20','CMO_14',
+    'COPC_11_14_10','CTI_12','DEC_1','DPO_20','EBSW_40_10','EFI_13','ER_10','BULLP_13','BEARP_13',
+    'FISHERT_9_1','FISHERTs_9_1','INC_1','K_9_3','D_9_3','J_9_3','LR_14','LOGRET_1','MACD_12_26_9','MACDh_12_26_9',
+    'MACDs_12_26_9','MAD_30','MASSI_9_25','MFI_14','MOM_10','NATR_14','NVI_1','PDIST','PCTRET_1','PGO_14','PPO_12_26_9',
+    'PPOh_12_26_9','PPOs_12_26_9','PSARaf_0.02_0.2','PSARr_0.02_0.2','PSL_12','PVI_1','PVO_12_26_9','PVOh_12_26_9','PVOs_12_26_9',
+    'PVR','PVT','QQE_14_5_4.236','QQE_14_5_4.236_RSIMA','QS_10','ROC_10','RSI_14','RSX_14','RVGI_14_4','RVGIs_14_4','RVI_14',
+    'SKEW_30','SLOPE_1','SMI_5_20_5','SMIs_5_20_5','SMIo_5_20_5','SQZ_20_2.0_20_1.5','SQZ_ON','SQZ_OFF','SQZ_NO',
+    'SQZPRO_20_2.0_20_2_1.5_1','SQZPRO_ON_WIDE','SQZPRO_ON_NORMAL','SQZPRO_ON_NARROW','SQZPRO_OFF','SQZPRO_NO','STC_10_12_26_0.5',
+    'STCmacd_10_12_26_0.5','STCstoch_10_12_26_0.5','STDEV_30','STOCHk_14_3_3','STOCHd_14_3_3','STOCHRSIk_14_14_3_3',
+    'STOCHRSId_14_14_3_3','SUPERTd_7_3.0','THERMOl_20_2_0.5','THERMOs_20_2_0.5','TRIX_30_9','TRIXs_30_9','TRUERANGE_1','TSI_13_25_13',
+    'TSIs_13_25_13','TTM_TRND_6','UI_14','UO_7_14_28','VHF_28','VTXP_14','VTXM_14','WILLR_14','ZS_30'
+]
+
+# ======================
+# FIXED TRADE LOGGER WITH INTEGER SHARES
+# ======================
+class TradeLogger:
+    def __init__(self):
+        self.trades = []
+        self.positions = {}  # Track positions for each symbol
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.current_portfolio_value = 0  # Track current portfolio value
+        
+    def log_trade(self, date, symbol, action, quantity, price, cost, portfolio_value, prev_positions):
+        """
+        Log trade with proper buy/sell detection based on position changes
+        """
+        # Update current portfolio value
+        self.current_portfolio_value = portfolio_value
+        
+        # Enforce integer positions
+        current_pos = int(round(quantity))
+        prev_pos = int(round(prev_positions.get(symbol, 0)))
+        
+        # Determine actual action based on position change
+        pos_change = current_pos - prev_pos
+        
+        if abs(pos_change) > 0:  # Only log if significant change
+            if pos_change > 0:
+                actual_action = "Buy"
+                trade_quantity = pos_change
+            else:
+                actual_action = "Sell"
+                trade_quantity = abs(pos_change)
+                
+                # Calculate win/loss for sell trades
+                if symbol in self.positions and self.positions[symbol]['avg_price'] > 0:
+                    avg_buy_price = self.positions[symbol]['avg_price']
+                    if price > avg_buy_price:
+                        self.winning_trades += 1
+                    else:
+                        self.losing_trades += 1
+            
+            trade = {
+                'trade_id': len(self.trades) + 1,
+                'date': date,
+                'symbol': symbol,
+                'action': actual_action,
+                'quantity': trade_quantity,
+                'price': price,
+                'transaction_cost': cost,
+                'total_value': trade_quantity * price,
+                'portfolio_value': portfolio_value,
+                'position_before': prev_pos,
+                'position_after': current_pos
+            }
+            self.trades.append(trade)
+            
+            # Update position tracking
+            if actual_action == "Buy":
+                if symbol not in self.positions:
+                    self.positions[symbol] = {'quantity': 0, 'avg_price': 0}
+                
+                old_qty = self.positions[symbol]['quantity']
+                old_avg = self.positions[symbol]['avg_price']
+                
+                new_qty = old_qty + trade_quantity
+                new_avg = ((old_qty * old_avg) + (trade_quantity * price)) / new_qty if new_qty > 0 else 0
+                
+                self.positions[symbol] = {'quantity': new_qty, 'avg_price': new_avg}
+            
+            elif actual_action == "Sell" and symbol in self.positions:
+                self.positions[symbol]['quantity'] = max(0, self.positions[symbol]['quantity'] - trade_quantity)
+        
+    def get_trade_logbook(self):
+        if not self.trades:
+            return pd.DataFrame()
+        return pd.DataFrame(self.trades)
+    
+    def get_trade_summary(self):
+        if not self.trades:
+            return {}
+        
+        df = self.get_trade_logbook()
+        total_trades = len(df)
+        buy_trades = len(df[df['action'] == 'Buy'])
+        sell_trades = len(df[df['action'] == 'Sell'])
+        total_costs = df['transaction_cost'].sum()
+        
+        # Calculate win rate
+        total_closed_trades = self.winning_trades + self.losing_trades
+        win_rate = (self.winning_trades / total_closed_trades * 100) if total_closed_trades > 0 else 0
+        
+        return {
+            'total_trades': total_trades,
+            'buy_trades': buy_trades,
+            'sell_trades': sell_trades,
+            'total_transaction_costs': total_costs,
+            'avg_cost_per_trade': total_costs / total_trades if total_trades > 0 else 0,
+            'winning_trades': self.winning_trades,
+            'losing_trades': self.losing_trades,
+            'win_rate_pct': win_rate,
+            'total_closed_trades': total_closed_trades
+        }
+
+def handle_nan_per_stock(df):
+    """
+    Apply conservative NaN handling for a single stock
+    Returns cleaned DataFrame and indicator columns
+    """
+    basic_cols = ['symbol', 'open', 'high', 'low', 'close', 'volume']
+    indicator_cols = [col for col in df.columns if col not in basic_cols]
+    
+    # Find rows with no NaN values in ANY indicator column
+    no_nan_mask = df[indicator_cols].notna().all(axis=1)
+    rows_with_all_indicators = df[no_nan_mask]
+    
+    if len(rows_with_all_indicators) > 0:
+        first_complete_date = rows_with_all_indicators.index[0]
+        df_conservative = df.loc[first_complete_date:].copy()
+        
+        print(f"  Found {len(rows_with_all_indicators)} rows with ALL indicators filled")
+        print(f"  First complete date: {first_complete_date}")
+        print(f"  Conservative filtered shape: {df_conservative.shape}")
+        print(f"  Rows removed: {df.shape[0] - df_conservative.shape[0]}")
+        
+        # Verify
+        remaining_nans = df_conservative[indicator_cols].isnull().sum().sum()
+        print(f"  Remaining NaN values: {remaining_nans}")
+        
+    else:
+        print("  No rows found with ALL indicators filled. Using best available row.")
+        
+        nan_count_per_row = df[indicator_cols].isnull().sum(axis=1)
+        min_nan_count = nan_count_per_row.min()
+        best_row_idx = nan_count_per_row.idxmin()
+        
+        print(f"  Best row: {best_row_idx} with {min_nan_count} NaN values")
+        print(f"  Starting from this date")
+        
+        df_conservative = df.loc[best_row_idx:].copy()
+        print(f"  Shape: {df_conservative.shape}")
+        
+        # Check which indicators still have NaN values
+        remaining_nan_indicators = df_conservative[indicator_cols].isnull().sum()
+        remaining_nan_indicators = remaining_nan_indicators[remaining_nan_indicators > 0]
+        
+        if len(remaining_nan_indicators) > 0:
+            print(f"  Indicators still with NaN values:")
+            for indicator, nan_count in remaining_nan_indicators.items():
+                print(f"    {indicator}: {nan_count} NaN values")
+    
+    # =====================================================
+    # ADDED: PROTECTION AGAINST ZERO PRICES
+    # =====================================================
+    print("  Cleaning zero/negative prices...")
+    
+    # Define price columns to clean
+    price_cols = ['open', 'high', 'low', 'close']
+    
+    for col in price_cols:
+        if col in df_conservative.columns:
+            # 1. Replace zeros and negative values with NaN
+            df_conservative[col] = df_conservative[col].replace([0, -np.inf, np.inf], np.nan)
+            
+            # 2. Forward fill and backward fill to replace NaNs
+            df_conservative[col] = df_conservative[col].ffill().bfill()
+            
+            # 3. Ensure minimum price of 0.01
+            df_conservative[col] = df_conservative[col].clip(lower=0.01)
+            
+            # 4. Report any remaining issues
+            if df_conservative[col].isna().any():
+                print(f"  ⚠️ Warning: Still have NaN values in {col} after cleaning")
+            if (df_conservative[col] <= 0).any():
+                print(f"  ⚠️ Warning: Still have non-positive values in {col} after cleaning")
+    
+    print("  Price cleaning completed. All prices >= 0.01")
+    
+    return df_conservative, indicator_cols
+
+def prepare_data_for_finrl(df, scalers=None, skip_scaling=False):
+    """
+    Prepare technical indicators data for FinRL format.
+
+    scalers: dict of {tic: fitted RobustScaler} or None to fit new scalers.
+    skip_scaling: if True, skip normalisation entirely (used for the initial
+                  format-conversion pass before the train/test split).
+    Returns (processed_df, tech_indicators, scalers).
+    """
+    processed_df = df.copy()
+    
+    # Handle datetime index properly
+    if isinstance(processed_df.index, pd.DatetimeIndex):
+        processed_df = processed_df.reset_index()
+        processed_df.rename(columns={'datetime': 'date'}, inplace=True)
+    elif 'datetime' in processed_df.columns:
+        processed_df.rename(columns={'datetime': 'date'}, inplace=True)
+    else:
+        # If first column looks like datetime
+        if processed_df.index.name is not None:
+            processed_df = processed_df.reset_index()
+            processed_df.rename(columns={processed_df.columns[0]: 'date'}, inplace=True)
+    
+    # FinRL expects 'tic' column instead of 'symbol'
+    if 'symbol' in processed_df.columns:
+        processed_df.rename(columns={'symbol': 'tic'}, inplace=True)
+    
+    # Convert date to proper format
+    processed_df['date'] = pd.to_datetime(processed_df['date'])
+    processed_df['date'] = processed_df['date'].dt.strftime('%Y-%m-%d')
+    
+    # Get technical indicator columns (exclude basic OHLCV columns)
+    tech_indicators = [col for col in processed_df.columns 
+                      if col not in ['date', 'tic', 'open', 'high', 'low', 'close', 'volume']]
+    
+    # Handle any NaN values in technical indicators
+    print("  Handling NaN values in technical indicators...")
+    print(f"  NaN count before cleaning: {processed_df[tech_indicators].isna().sum().sum()}")
+    
+    # Use newer pandas methods
+    processed_df[tech_indicators] = processed_df[tech_indicators].ffill().bfill()
+    
+    # Replace infinite values
+    processed_df[tech_indicators] = processed_df[tech_indicators].replace([np.inf, -np.inf], np.nan)
+    processed_df[tech_indicators] = processed_df[tech_indicators].fillna(0)
+    
+    print(f"  NaN count after cleaning: {processed_df[tech_indicators].isna().sum().sum()}")
+    
+    # Normalise — fit on training data only to prevent data leakage.
+    if not skip_scaling:
+        is_fitting = scalers is None
+        if is_fitting:
+            scalers = {}
+        normalized_dfs = []
+        for tic in processed_df['tic'].unique():
+            tic_data = processed_df[processed_df['tic'] == tic].copy()
+            if len(tic_data) > 1:
+                if is_fitting:
+                    scaler = RobustScaler()
+                    tic_data[tech_indicators] = scaler.fit_transform(tic_data[tech_indicators])
+                    scalers[tic] = scaler
+                elif tic in scalers:
+                    tic_data[tech_indicators] = scalers[tic].transform(tic_data[tech_indicators])
+            normalized_dfs.append(tic_data)
+        processed_df = pd.concat(normalized_dfs, ignore_index=True)
+        print("  Technical indicators normalised using RobustScaler per symbol")
+    
+    # Ensure required columns exist
+    required_cols = ['date', 'open', 'high', 'low', 'close', 'volume', 'tic']
+    for col in required_cols:
+        if col not in processed_df.columns:
+            raise ValueError(f"Required column '{col}' not found in dataframe")
+    
+    # Clean OHLCV data
+    for col in ['open', 'high', 'low', 'close', 'volume']:
+        processed_df[col] = processed_df[col].replace([np.inf, -np.inf], np.nan)
+        processed_df[col] = processed_df[col].ffill().bfill()
+        processed_df[col] = processed_df[col].fillna(processed_df[col].median())
+    
+    # Sort by date and tic (crucial for time series)
+    processed_df = processed_df.sort_values(['date', 'tic']).reset_index(drop=True)
+    
+    print(f"  Technical indicators found: {len(tech_indicators)}")
+    print(f"  Data date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
+    print(f"  Unique symbols: {processed_df['tic'].unique()}")
+    
+    return processed_df, tech_indicators, scalers
+
+# ======================
+# FIXED TRADING ENVIRONMENT WITH INTEGER SHARES
+# ======================
+# ======================
+# FIXED TRADING ENVIRONMENT WITH INTEGER SHARES AND PRICE VALIDATION
+# ======================
+class IntegerTradingEnv(StockTradingEnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Ensure we start with integer positions
+        self.state[1:1+self.stock_dim] = np.round(self.state[1:1+self.stock_dim]).astype(int)
+        
+    def _process_action(self, action):
+        """Enforce position limits, budget constraints, and integer shares"""
+        # Round to integer shares
+        action = np.round(action).astype(int)
+        
+        # Get current positions
+        positions = self.state[1:1+self.stock_dim].copy()
+        cash = self.state[0]
+        
+        # Process each trade
+        for i in range(self.stock_dim):
+            # Get current price
+            price_index = 1 + self.stock_dim + i * (len(self.tech_indicator_list) + 1)
+            price = self.state[price_index]
+            
+            # Validate price - add protection against zero prices
+            if price < 1e-6:  # Price is zero or near zero
+                # Set to a small positive value to avoid division errors
+                price = 0.01
+                self.state[price_index] = price  # Update state to prevent future errors
+                print(f"⚠️ Warning: Near-zero price detected at index {i}, setting to 0.01")
+            
+            # Calculate maximum shares we can afford
+            if action[i] > 0:  # Buy
+                denominator = price * (1 + self.buy_cost_pct[i])
+                if denominator < 1e-6:  # Avoid division by zero
+                    max_affordable = 0
+                else:
+                    max_affordable = cash // denominator
+                action[i] = min(action[i], max_affordable, self.hmax)
+            elif action[i] < 0:  # Sell
+                action[i] = max(action[i], -positions[i])
+        
+        return action
+    
+    def step(self, action):
+        # Pre-process action to enforce constraints
+        action = self._process_action(action)
+        
+        # Execute the trade
+        step_result = super().step(action)
+        
+        # Handle both Gymnasium return formats (4 or 5 values)
+        if len(step_result) == 5:
+            obs, reward, terminated, truncated, info = step_result
+            done = terminated or truncated
+        else:
+            obs, reward, done, info = step_result
+            terminated = done
+            truncated = False
+        
+        # Ensure positions remain integer
+        self.state[1:1+self.stock_dim] = np.round(self.state[1:1+self.stock_dim]).astype(int)
+        
+        # Validate positions remain non-negative
+        for i in range(self.stock_dim):
+            if self.state[1+i] < 0:
+                self.state[1+i] = 0
+        
+        # Update total asset value
+        total_asset_val = self.state[0]
+        for i in range(self.stock_dim):
+            step_size = len(self.tech_indicator_list) + 1
+            price_index = 1 + self.stock_dim + i * step_size
+            shares = self.state[1+i]
+            price = self.state[price_index]
+            
+            # Validate price again
+            if price < 1e-6:
+                price = 0.01
+                self.state[price_index] = price
+                
+            total_asset_val += shares * price
+        self.total_asset = total_asset_val
+                
+        # Return in the same format we received
+        if len(step_result) == 5:
+            return obs, reward, terminated, truncated, info
+        else:
+            return obs, reward, done, info
+
+def create_trading_environment(df, tech_indicators, initial_amount=10000):
+    """
+    Create trading environment with 0.25% transaction costs
+    """
+    stock_dim = df['tic'].nunique()
+    print(f"  Number of stocks: {stock_dim}")
+    
+    # Environment parameters with 0.25% transaction costs
+    env_kwargs = {
+        "df": df,
+        "stock_dim": stock_dim,
+        "hmax": 10,   # Max shares per trade (realistic for high-priced Indian stocks)
+        "initial_amount": initial_amount,
+        "num_stock_shares": [0] * stock_dim,
+        "buy_cost_pct": [0.0025] * stock_dim,   # 0.25% transaction cost
+        "sell_cost_pct": [0.0025] * stock_dim,  # 0.25% transaction cost
+        "reward_scaling": 1e-3,  # 1e-4 made critic rewards too tiny to learn from
+        "state_space": 1 + 2*stock_dim + len(tech_indicators)*stock_dim,
+        "action_space": stock_dim,
+        "tech_indicator_list": tech_indicators,
+        "turbulence_threshold": None,
+        "make_plots": False,
+        "print_verbosity": 5
+    }
+    
+    print(f"  State space dimension: {env_kwargs['state_space']}")
+    print(f"  Action space dimension: {env_kwargs['action_space']}")
+    
+    try:
+        # Use our fixed environment
+        env = IntegerTradingEnv(**env_kwargs)
+        print("  Environment created successfully")
+        return env
+    except Exception as e:
+        print(f"  Error creating environment: {e}")
+        raise
+
+def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=200000):
+    """
+    Train PPO model using FinRL with TensorBoard logging
+    """
+    print(f"  Creating training environment for {stock_name}...")
+    env_train = DummyVecEnv([lambda: create_trading_environment(train_df, tech_indicators, initial_amount=10000)])
+    
+    print(f"  Training PPO model for {stock_name}...")
+    
+    # TensorBoard logging setup
+    log_dir = f"runs/{stock_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(log_dir, exist_ok=True)
+    writer = SummaryWriter(log_dir)
+    
+    PPO_PARAMS = {
+        "learning_rate": 3e-4,    # PPO default; 1e-4 was too slow to converge
+        "n_steps": 2048,          # larger rollout buffer for stable gradient estimates
+        "batch_size": 256,        # bigger minibatch reduces gradient noise
+        "n_epochs": 10,           # more passes over each rollout
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_range": 0.2,        # standard PPO value; 0.1 was overly restrictive
+        # clip_range_vf intentionally omitted — setting it to 0.1 prevented the value
+        # function from learning, causing explained_variance to go deeply negative
+        "normalize_advantage": True,
+        "ent_coef": 0.01,
+        "vf_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "verbose": 1,
+        "seed": 42,
+        "device": "auto",
+        "tensorboard_log": log_dir,
+        "policy_kwargs": {
+            "net_arch": [256, 128],  # wider network needed for ~100 input features
+            "activation_fn": torch.nn.Tanh
+        }
+    }
+    
+    print(f"  Creating PPO model for {stock_name}...")
+    
+    try:
+        model_ppo = PPO("MlpPolicy", env_train, **PPO_PARAMS)
+        print(f"  PPO model for {stock_name} created successfully")
+        
+        print(f"  Starting training for {total_timesteps} timesteps...")
+        
+        model_ppo.learn(
+            total_timesteps=total_timesteps,
+            tb_log_name='ppo',
+            progress_bar=True
+        )
+        
+        print(f"  Training for {stock_name} completed successfully!")
+        return model_ppo
+        
+    except Exception as e:
+        print(f"  Error during training: {e}")
+        raise
+
+def test_ppo_model(trained_model, test_df, tech_indicators, stock_name):
+    """
+    Test the trained PPO model with enhanced logging
+    """
+    print(f"  Creating testing environment for {stock_name}...")
+    env_test = create_trading_environment(test_df, tech_indicators, initial_amount=10000)
+    
+    print(f"  Testing PPO model for {stock_name}...")
+    
+    # Initialize trade logger
+    trade_logger = TradeLogger()
+    
+    reset_result = env_test.reset()
+    
+    if isinstance(reset_result, tuple):
+        obs, info = reset_result
+    else:
+        obs = reset_result
+    
+    account_values = []
+    actions_taken = []
+    
+    # Get actual dates from test data
+    unique_dates = sorted(test_df['date'].unique())
+    symbols = test_df['tic'].unique()
+    
+    done = False
+    step_count = 0
+    max_steps = len(unique_dates)
+    prev_positions = {symbol: 0 for symbol in symbols}
+    
+    print(f"  Starting test with max steps: {max_steps}")
+    print(f"  Symbols being traded: {list(symbols)}")
+    
+    while not done and step_count < max_steps:
+        try:
+            action, _states = trained_model.predict(obs, deterministic=True)
+            
+            step_result = env_test.step(action)
+            
+            if len(step_result) == 4:
+                obs, reward, done, info = step_result
+            else:
+                obs, reward, terminated, truncated, info = step_result
+                done = terminated or truncated
+            
+            # Get current portfolio value
+            if hasattr(env_test, 'total_asset'):
+                current_value = env_test.total_asset
+            elif hasattr(env_test, 'asset_memory') and len(env_test.asset_memory) > 0:
+                current_value = env_test.asset_memory[-1]
+            else:
+                current_value = info.get('total_asset', 10000)
+            
+            account_values.append(current_value)
+            actions_taken.append(action.copy())
+            
+            # Get current positions from environment state
+            current_positions = {}
+            if hasattr(env_test, 'state') and len(env_test.state) > 1:
+                # Extract positions from state
+                stock_dim = len(symbols)
+                balance_idx = 0
+                pos_start_idx = 1
+                pos_end_idx = 1 + stock_dim
+                
+                if len(env_test.state) > pos_end_idx:
+                    positions = env_test.state[pos_start_idx:pos_end_idx]
+                    for i, symbol in enumerate(symbols):
+                        if i < len(positions):
+                            # Ensure integer positions
+                            current_positions[symbol] = int(round(positions[i]))
+            
+            # Log trades with current date
+            if step_count < len(unique_dates):
+                current_date = unique_dates[step_count]
+                current_date_data = test_df[test_df['date'] == current_date]
+                
+                for i, symbol in enumerate(symbols):
+                    if i < len(current_positions):
+                        symbol_data = current_date_data[current_date_data['tic'] == symbol]
+                        
+                        if len(symbol_data) > 0:
+                            price = symbol_data['close'].iloc[0]
+                            current_pos = current_positions[symbol]
+                            prev_pos = prev_positions.get(symbol, 0)
+                            
+                            # Calculate position change
+                            pos_change = current_pos - prev_pos
+                            
+                            # Only log if significant position change
+                            if abs(pos_change) > 0:
+                                # Calculate transaction cost
+                                cost = abs(pos_change) * price * 0.0025
+                                
+                                # Validate trade doesn't exceed portfolio value
+                                trade_value = abs(pos_change) * price
+                                if trade_value > current_value * 5:  # 5x leverage check
+                                    print(f"  Suspicious trade: {trade_value:,.2f} vs portfolio {current_value:,.2f}")
+                                
+                                trade_logger.log_trade(
+                                    date=current_date,
+                                    symbol=symbol,
+                                    action="",  # Determined by logger
+                                    quantity=current_pos,
+                                    price=price,
+                                    cost=cost,
+                                    portfolio_value=current_value,
+                                    prev_positions=prev_positions.copy()
+                                )
+            
+            # Update previous positions
+            prev_positions = current_positions.copy()
+            step_count += 1
+            
+            if step_count % 100 == 0 or step_count == max_steps:
+                print(f"  Step {step_count}/{max_steps}, current value: ₹{current_value:,.2f}")
+                
+        except Exception as e:
+            print(f"  Error during testing at step {step_count}: {e}")
+            break
+    
+    print(f"  Testing completed after {step_count} steps")
+    
+    if len(account_values) == 0:
+        print("  Warning: No account values recorded during testing")
+        account_values = [10000]
+        actions_taken = [np.array([0])]
+    
+    # Create DataFrame with proper dates
+    df_account_value = pd.DataFrame({
+        'account_value': account_values,
+        'date': pd.to_datetime(unique_dates[:len(account_values)])
+    })
+    
+    df_actions = pd.DataFrame({
+        'actions': actions_taken
+    })
+    
+    print(f"  Account value range: ₹{min(account_values):,.2f} - ₹{max(account_values):,.2f}")
+    
+    return df_account_value, df_actions, trade_logger
+
+def calculate_yearly_returns(df_account_value):
+    """
+    Calculate comprehensive yearly returns and metrics
+    """
+    df = df_account_value.copy()
+    
+    if 'date' not in df.columns:
+        print("Warning: No date column found, using index")
+        return {}
+    
+    df['daily_return'] = df['account_value'].pct_change(1)
+    df = df.dropna()
+    
+    if len(df) == 0:
+        print("Warning: No data available for return calculation")
+        return {}
+    
+    # Calculate various return metrics
+    total_days = len(df)
+    total_return = (df['account_value'].iloc[-1] / df['account_value'].iloc[0]) - 1
+    
+    # Annualized return (assuming 252 trading days per year)
+    if total_days > 0:
+        annualized_return = ((1 + total_return) ** (252 / total_days)) - 1
+    else:
+        annualized_return = 0
+    
+    # Additional metrics
+    volatility = df['daily_return'].std() * np.sqrt(252) if len(df) > 1 else 0
+    sharpe_ratio = annualized_return / volatility if volatility != 0 else 0
+    
+    # Maximum drawdown
+    running_max = df['account_value'].expanding().max()
+    drawdown = (df['account_value'] - running_max) / running_max
+    max_drawdown = drawdown.min()
+    
+    return {
+        'total_return_pct': total_return * 100,
+        'annualized_return_pct': annualized_return * 100,
+        'volatility_pct': volatility * 100,
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown_pct': max_drawdown * 100,
+        'trading_days': total_days,
+        'start_value': df['account_value'].iloc[0],
+        'end_value': df['account_value'].iloc[-1]
+    }
+
+def calculate_buy_and_hold(test_df, initial_amount=10000):
+    """
+    Calculate buy and hold strategy performance
+    """
+    # Get unique symbols and their data
+    symbols = test_df['tic'].unique()
+    
+    # Simple buy and hold: equal weight allocation
+    allocation_per_stock = initial_amount / len(symbols)
+    
+    buy_hold_values = []
+    
+    # Get first and last prices for each symbol
+    for symbol in symbols:
+        symbol_data = test_df[test_df['tic'] == symbol].sort_values('date')
+        if len(symbol_data) > 0:
+            first_price = symbol_data['close'].iloc[0]
+            last_price = symbol_data['close'].iloc[-1]
+            
+            # Calculate shares bought and final value
+            shares = allocation_per_stock / first_price
+            final_value = shares * last_price
+            buy_hold_values.append(final_value)
+    
+    total_buy_hold_value = sum(buy_hold_values)
+    buy_hold_return = (total_buy_hold_value / initial_amount - 1) * 100
+    
+    return {
+        'initial_value': initial_amount,
+        'final_value': total_buy_hold_value,
+        'total_return_pct': buy_hold_return,
+        'strategy': 'Equal Weight Buy & Hold'
+    }
+
+def create_comprehensive_report(df_account_value, trade_logger, test_df, stock_name, output_dir):
+    """
+    Create comprehensive performance report with win rate
+    """
+    report_path = os.path.join(output_dir, f"{stock_name}_report.txt")
+    
+    with open(report_path, 'w') as f:
+        f.write("\n" + "="*80 + "\n")
+        f.write(f"COMPREHENSIVE TRADING PERFORMANCE REPORT FOR {stock_name}\n")
+        f.write("="*80 + "\n")
+        
+        # PPO Strategy Performance
+        ppo_metrics = calculate_yearly_returns(df_account_value)
+        
+        f.write("\n📊 PPO STRATEGY PERFORMANCE\n")
+        f.write("-" * 40 + "\n")
+        f.write(f"Initial Portfolio Value: ₹{ppo_metrics.get('start_value', 0):,.2f}\n")
+        f.write(f"Final Portfolio Value: ₹{ppo_metrics.get('end_value', 0):,.2f}\n")
+        f.write(f"Total Return: {ppo_metrics.get('total_return_pct', 0):.2f}%\n")
+        f.write(f"Annualized Return: {ppo_metrics.get('annualized_return_pct', 0):.2f}%\n")
+        f.write(f"Volatility (Annualized): {ppo_metrics.get('volatility_pct', 0):.2f}%\n")
+        f.write(f"Sharpe Ratio: {ppo_metrics.get('sharpe_ratio', 0):.3f}\n")
+        f.write(f"Maximum Drawdown: {ppo_metrics.get('max_drawdown_pct', 0):.2f}%\n")
+        f.write(f"Trading Days: {ppo_metrics.get('trading_days', 0)}\n")
+        
+        # Buy and Hold Performance
+        buy_hold_metrics = calculate_buy_and_hold(test_df, ppo_metrics.get('start_value', 10000))
+        
+        f.write(f"\n📈 BUY & HOLD STRATEGY PERFORMANCE\n")
+        f.write("-" * 40 + "\n")
+        f.write(f"Strategy: {buy_hold_metrics['strategy']}\n")
+        f.write(f"Initial Portfolio Value: ₹{buy_hold_metrics['initial_value']:,.2f}\n")
+        f.write(f"Final Portfolio Value: ₹{buy_hold_metrics['final_value']:,.2f}\n")
+        f.write(f"Total Return: {buy_hold_metrics['total_return_pct']:.2f}%\n")
+        
+        # Strategy Comparison
+        f.write(f"\n🔄 STRATEGY COMPARISON\n")
+        f.write("-" * 40 + "\n")
+        ppo_return = ppo_metrics.get('total_return_pct', 0)
+        bh_return = buy_hold_metrics['total_return_pct']
+        outperformance = ppo_return - bh_return
+        
+        f.write(f"PPO Strategy Return: {ppo_return:.2f}%\n")
+        f.write(f"Buy & Hold Return: {bh_return:.2f}%\n")
+        f.write(f"Outperformance: {outperformance:.2f}%\n")
+        
+        if outperformance > 0:
+            f.write("✅ PPO Strategy OUTPERFORMED Buy & Hold\n")
+        else:
+            f.write("❌ PPO Strategy UNDERPERFORMED Buy & Hold\n")
+        
+        # Trade Summary with Win Rate
+        trade_summary = trade_logger.get_trade_summary()
+        
+        f.write(f"\n📋 TRADE SUMMARY & ACCURACY\n")
+        f.write("-" * 40 + "\n")
+        f.write(f"Total Trades: {trade_summary.get('total_trades', 0)}\n")
+        f.write(f"Buy Trades: {trade_summary.get('buy_trades', 0)}\n")
+        f.write(f"Sell Trades: {trade_summary.get('sell_trades', 0)}\n")
+        f.write(f"Total Transaction Costs: ₹{trade_summary.get('total_transaction_costs', 0):,.2f}\n")
+        f.write(f"Average Cost per Trade: ₹{trade_summary.get('avg_cost_per_trade', 0):.2f}\n")
+        f.write(f"\n🎯 TRADING ACCURACY:\n")
+        f.write(f"Winning Trades: {trade_summary.get('winning_trades', 0)}\n")
+        f.write(f"Losing Trades: {trade_summary.get('losing_trades', 0)}\n")
+        f.write(f"Win Rate: {trade_summary.get('win_rate_pct', 0):.2f}%\n")
+        f.write(f"Total Closed Trades: {trade_summary.get('total_closed_trades', 0)}\n")
+    
+    print(f"  Report saved to: {report_path}")
+    return ppo_metrics, buy_hold_metrics, trade_summary
+
+def process_stock(file_path):
+    """
+    Process a single stock from file loading to reporting
+    Returns stock results for consolidated report
+    """
+    stock_name = os.path.basename(file_path).split("_")[0]
+    stock_result_dir = os.path.join(RESULTS_DIR, stock_name)
+    os.makedirs(stock_result_dir, exist_ok=True)
+    
+    print(f"\n{'='*50}")
+    print(f"PROCESSING {stock_name}")
+    print(f"{'='*50}")
+    
+    try:
+        # Step 1: Load data
+        print(f"  Loading data from: {file_path}")
+        df = pd.read_csv(file_path)
+        
+        # Ensure datetime index
+        if 'datetime' in df.columns:
+            df['datetime'] = pd.to_datetime(df['datetime'])
+            df = df.set_index('datetime')
+            df = df.sort_index()
+        
+        # Add symbol column
+        df['symbol'] = stock_name
+        
+        # Step 2: Calculate technical indicators
+        print("  Calculating technical indicators...")
+        # Force single-process indicator computation. pandas_ta's default
+        # multi-core path spawns workers that each re-import numpy/pandas/TF
+        # and exhaust the Windows page file on this machine.
+        try:
+            df.ta.cores = 0
+        except Exception:
+            pass
+        df.ta.study(ta.AllStudy, cores=0)
+        
+        # Filter to keep only your desired indicators
+        basic_cols = ['symbol', 'open', 'high', 'low', 'close', 'volume']
+        existing_indicators = [col for col in list_of_indicators if col in df.columns]
+        columns_to_keep = basic_cols + existing_indicators
+        df = df[columns_to_keep]
+        
+        # Step 3: Handle NaN values
+        print("  Handling NaN values...")
+        df, indicator_cols = handle_nan_per_stock(df)
+        
+        # Skip stocks with insufficient data
+        if len(df) < MIN_DATA_ROWS:
+            raise ValueError(f"Insufficient data ({len(df)} rows) after cleaning. Minimum {MIN_DATA_ROWS} required.")
+        
+        # Step 4: Format conversion only — no scaling yet (needed to determine split date)
+        print("  Preparing data for FinRL...")
+        processed_raw, tech_indicators, _ = prepare_data_for_finrl(df, skip_scaling=True)
+
+        # Step 5: Split data (80/20 per stock timeline)
+        unique_dates = sorted(processed_raw['date'].unique())
+        split_index = int(len(unique_dates) * 0.8)
+        split_date = unique_dates[split_index]
+
+        train_raw = processed_raw[processed_raw['date'] < split_date].reset_index(drop=True)
+        test_raw  = processed_raw[processed_raw['date'] >= split_date].reset_index(drop=True)
+
+        # Fit scaler on training data only, then apply the same scaler to test data.
+        # Fitting on all data before splitting leaks future statistics into the model.
+        train_df, _, scalers = prepare_data_for_finrl(train_raw, scalers=None,    skip_scaling=False)
+        test_df,  _, _       = prepare_data_for_finrl(test_raw,  scalers=scalers, skip_scaling=False)
+        
+        print(f"  Split at {split_date}:")
+        print(f"    Training: {len(train_df)} rows ({len(train_df['date'].unique())} dates)")
+        print(f"    Testing:  {len(test_df)} rows ({len(test_df['date'].unique())} dates)")
+        
+        # Step 6: Train PPO model
+        model = train_ppo_model(train_df, tech_indicators, stock_name)
+        
+        # Save model
+        model_path = os.path.join(TRAINED_MODEL_DIR, f"{stock_name}_ppo.zip")
+        model.save(model_path)
+        print(f"  Model saved to: {model_path}")
+        
+        # Step 7: Test model
+        df_account_value, df_actions, trade_logger = test_ppo_model(
+            model, test_df, tech_indicators, stock_name
+        )
+        
+        # Step 8: Generate report
+        ppo_metrics, buy_hold_metrics, trade_summary = create_comprehensive_report(
+            df_account_value, trade_logger, test_df, stock_name, stock_result_dir
+        )
+        
+        # Save outputs
+        df_account_value.to_csv(os.path.join(stock_result_dir, "account_value.csv"), index=False)
+        trade_logbook = trade_logger.get_trade_logbook()
+        if not trade_logbook.empty:
+            trade_logbook.to_csv(os.path.join(stock_result_dir, "trades.csv"), index=False)
+        
+        print(f"  Results saved to: {stock_result_dir}")
+        
+        # Return results for consolidation
+        return {
+            'stock': stock_name,
+            'final_value': ppo_metrics['end_value'],
+            'buy_hold_value': buy_hold_metrics['final_value'],
+            'win_rate': trade_summary['win_rate_pct'],
+            'transaction_costs': trade_summary['total_transaction_costs'],
+            'total_trades': trade_summary['total_trades'],
+            'closed_trades': trade_summary['total_closed_trades'],
+            'winning_trades': trade_summary['winning_trades']
+        }
+        
+    except Exception as e:
+        print(f"  ⚠️ Error processing {stock_name}: {str(e)}")
+        return None
+
+def generate_consolidated_report(stock_results):
+    """
+    Generate consolidated portfolio report
+    """
+    # Filter out failed stocks
+    valid_results = [r for r in stock_results if r is not None]
+    
+    if not valid_results:
+        print("\nNo valid results to consolidate!")
+        return
+    
+    total_final_value = sum(r['final_value'] for r in valid_results)
+    total_buy_hold_value = sum(r['buy_hold_value'] for r in valid_results)
+    total_transaction_costs = sum(r['transaction_costs'] for r in valid_results)
+    
+    # Calculate overall win rate
+    total_winning_trades = sum(r['winning_trades'] for r in valid_results)
+    total_closed_trades = sum(r['closed_trades'] for r in valid_results)
+    overall_win_rate = (total_winning_trades / total_closed_trades * 100) if total_closed_trades > 0 else 0
+    
+    # Portfolio returns
+    initial_investment = 10000 * len(valid_results)
+    portfolio_return = (total_final_value / initial_investment - 1) * 100
+    buy_hold_return = (total_buy_hold_value / initial_investment - 1) * 100
+    outperformance = portfolio_return - buy_hold_return
+    
+    with open(CONSOLIDATED_REPORT, 'w') as f:
+        f.write("\n" + "="*80 + "\n")
+        f.write("PORTFOLIO PERFORMANCE REPORT (NIFTY50 STOCKS)\n")
+        f.write("="*80 + "\n\n")
+        
+        f.write(f"Stocks Processed: {len(valid_results)} out of 50\n")
+        f.write(f"Initial Investment: ₹{initial_investment:,.2f}\n")
+        f.write(f"Final Portfolio Value: ₹{total_final_value:,.2f}\n")
+        f.write(f"Buy & Hold Value: ₹{total_buy_hold_value:,.2f}\n")
+        f.write(f"Total Transaction Costs: ₹{total_transaction_costs:,.2f}\n\n")
+        
+        f.write(f"Portfolio Return: {portfolio_return:.2f}%\n")
+        f.write(f"Buy & Hold Return: {buy_hold_return:.2f}%\n")
+        f.write(f"Outperformance: {outperformance:.2f}%\n\n")
+        
+        f.write(f"Overall Win Rate: {overall_win_rate:.2f}%\n")
+        f.write(f"Total Closed Trades: {total_closed_trades}\n")
+        f.write(f"Winning Trades: {total_winning_trades}\n")
+        f.write(f"Losing Trades: {total_closed_trades - total_winning_trades}\n\n")
+        
+        f.write("Per Stock Results:\n")
+        f.write("-"*50 + "\n")
+        for r in valid_results:
+            f.write(f"{r['stock']}:\n")
+            f.write(f"  Final Value: ₹{r['final_value']:,.2f}\n")
+            f.write(f"  Buy&Hold: ₹{r['buy_hold_value']:,.2f}\n")
+            f.write(f"  Win Rate: {r['win_rate']:.2f}%\n")
+            f.write(f"  Transaction Costs: ₹{r['transaction_costs']:,.2f}\n\n")
+    
+    print("\n" + "="*80)
+    print(f"CONSOLIDATED REPORT SAVED TO: {CONSOLIDATED_REPORT}")
+    print("="*80)
+
+def main():
+    """
+    Main execution function for portfolio processing
+    """
+    print("\n" + "="*80)
+    print("NIFTY50 PORTFOLIO PPO TRADING SYSTEM")
+    print("="*80)
+    print(f"Data Directory: {NIFTY50_PATH}")
+    print(f"Models Directory: {TRAINED_MODEL_DIR}")
+    print(f"Results Directory: {RESULTS_DIR}")
+    print(f"Minimum Data Requirement: {MIN_DATA_ROWS} rows per stock\n")
+    
+    # Find all stock files
+    stock_files = glob.glob(os.path.join(NIFTY50_PATH, "*_daily.csv"))
+    if not stock_files:
+        print("No stock files found! Check directory path.")
+        return
+    
+    print(f"Found {len(stock_files)} stock files")
+    
+    stock_results = []
+    processed_count = 0
+    start_time = time.time()
+    
+    for file_path in stock_files:
+        stock_start = time.time()
+        result = process_stock(file_path)
+        
+        if result:
+            stock_results.append(result)
+            processed_count += 1
+            print(f"✅ Completed in {time.time() - stock_start:.1f} seconds")
+        else:
+            print(f"⚠️ Skipped {os.path.basename(file_path)}")
+    
+    # Generate consolidated report
+    generate_consolidated_report(stock_results)
+    
+    total_time = time.time() - start_time
+    print("\n" + "="*80)
+    print(f"PORTFOLIO PROCESSING COMPLETE!")
+    print(f"Stocks Processed: {processed_count}/{len(stock_files)}")
+    print(f"Total Time: {total_time/60:.1f} minutes")
+    print(f"Average per Stock: {total_time/processed_count:.1f} seconds" if processed_count else "")
+    print("="*80)
+
+if __name__ == "__main__":
+    main()

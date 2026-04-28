@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR BAJAJFINSV
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,167.89
+Final Portfolio Value: ₹10,336.71
+Total Return: 1.66%
+Annualized Return: 0.66%
+Volatility (Annualized): 15.28%
+Sharpe Ratio: 0.043
+Maximum Drawdown: -25.36%
+Trading Days: 627
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,167.89
+Final Portfolio Value: ₹12,814.13
+Total Return: 26.03%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 1.66%
+Buy & Hold Return: 26.03%
+Outperformance: -24.37%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 68
+Buy Trades: 35
+Sell Trades: 33
+Total Transaction Costs: ₹976.19
+Average Cost per Trade: ₹14.36
+
+🎯 TRADING ACCURACY:
+Winning Trades: 24
+Losing Trades: 9
+Win Rate: 72.73%
+Total Closed Trades: 33

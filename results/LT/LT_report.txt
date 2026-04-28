@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR LT
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,829.11
+Final Portfolio Value: ₹20,495.90
+Total Return: 108.52%
+Annualized Return: 27.03%
+Volatility (Annualized): 21.42%
+Sharpe Ratio: 1.262
+Maximum Drawdown: -22.61%
+Trading Days: 774
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,829.11
+Final Portfolio Value: ₹22,495.87
+Total Return: 128.87%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 108.52%
+Buy & Hold Return: 128.87%
+Outperformance: -20.35%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 62
+Buy Trades: 34
+Sell Trades: 28
+Total Transaction Costs: ₹1,286.65
+Average Cost per Trade: ₹20.75
+
+🎯 TRADING ACCURACY:
+Winning Trades: 14
+Losing Trades: 14
+Win Rate: 50.00%
+Total Closed Trades: 28

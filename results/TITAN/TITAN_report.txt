@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TITAN
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,005.95
+Total Return: 30.06%
+Annualized Return: 7.02%
+Volatility (Annualized): 21.02%
+Sharpe Ratio: 0.334
+Maximum Drawdown: -30.26%
+Trading Days: 976
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹19,781.11
+Total Return: 97.81%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 30.06%
+Buy & Hold Return: 97.81%
+Outperformance: -67.75%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 63
+Buy Trades: 32
+Sell Trades: 31
+Total Transaction Costs: ₹1,639.86
+Average Cost per Trade: ₹26.03
+
+🎯 TRADING ACCURACY:
+Winning Trades: 13
+Losing Trades: 18
+Win Rate: 41.94%
+Total Closed Trades: 31

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TATACONSUM
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,968.54
+Final Portfolio Value: ₹9,442.66
+Total Return: -5.28%
+Annualized Return: -1.97%
+Volatility (Annualized): 12.97%
+Sharpe Ratio: -0.152
+Maximum Drawdown: -17.60%
+Trading Days: 685
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,968.54
+Final Portfolio Value: ₹13,870.86
+Total Return: 39.15%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -5.28%
+Buy & Hold Return: 39.15%
+Outperformance: -44.42%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 96
+Buy Trades: 51
+Sell Trades: 45
+Total Transaction Costs: ₹1,861.34
+Average Cost per Trade: ₹19.39
+
+🎯 TRADING ACCURACY:
+Winning Trades: 32
+Losing Trades: 13
+Win Rate: 71.11%
+Total Closed Trades: 45

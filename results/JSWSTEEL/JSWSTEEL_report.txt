@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR JSWSTEEL
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,023.91
+Final Portfolio Value: ₹15,429.20
+Total Return: 53.92%
+Annualized Return: 16.13%
+Volatility (Annualized): 21.02%
+Sharpe Ratio: 0.767
+Maximum Drawdown: -20.02%
+Trading Days: 727
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,023.91
+Final Portfolio Value: ₹17,445.03
+Total Return: 74.03%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 53.92%
+Buy & Hold Return: 74.03%
+Outperformance: -20.11%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 98
+Buy Trades: 49
+Sell Trades: 49
+Total Transaction Costs: ₹2,883.35
+Average Cost per Trade: ₹29.42
+
+🎯 TRADING ACCURACY:
+Winning Trades: 35
+Losing Trades: 14
+Win Rate: 71.43%
+Total Closed Trades: 49

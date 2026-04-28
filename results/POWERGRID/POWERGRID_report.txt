@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR POWERGRID
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,025.62
+Final Portfolio Value: ₹12,373.53
+Total Return: 23.42%
+Annualized Return: 8.49%
+Volatility (Annualized): 6.79%
+Sharpe Ratio: 1.251
+Maximum Drawdown: -5.05%
+Trading Days: 651
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,025.62
+Final Portfolio Value: ₹18,236.26
+Total Return: 81.90%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 23.42%
+Buy & Hold Return: 81.90%
+Outperformance: -58.48%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 41
+Buy Trades: 20
+Sell Trades: 21
+Total Transaction Costs: ₹781.34
+Average Cost per Trade: ₹19.06
+
+🎯 TRADING ACCURACY:
+Winning Trades: 19
+Losing Trades: 2
+Win Rate: 90.48%
+Total Closed Trades: 21

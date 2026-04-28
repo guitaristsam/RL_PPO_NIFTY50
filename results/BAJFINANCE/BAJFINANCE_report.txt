@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR BAJFINANCE
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,123.45
+Final Portfolio Value: ₹17,499.64
+Total Return: 72.86%
+Annualized Return: 13.12%
+Volatility (Annualized): 28.42%
+Sharpe Ratio: 0.462
+Maximum Drawdown: -33.36%
+Trading Days: 1119
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,123.45
+Final Portfolio Value: ₹18,968.24
+Total Return: 87.37%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 72.86%
+Buy & Hold Return: 87.37%
+Outperformance: -14.51%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 7
+Buy Trades: 5
+Sell Trades: 2
+Total Transaction Costs: ₹160.95
+Average Cost per Trade: ₹22.99
+
+🎯 TRADING ACCURACY:
+Winning Trades: 1
+Losing Trades: 1
+Win Rate: 50.00%
+Total Closed Trades: 2

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR ITC
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹24,597.47
+Total Return: 145.97%
+Annualized Return: 22.27%
+Volatility (Annualized): 16.39%
+Sharpe Ratio: 1.359
+Maximum Drawdown: -15.14%
+Trading Days: 1128
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹20,587.76
+Total Return: 105.88%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 145.97%
+Buy & Hold Return: 105.88%
+Outperformance: 40.10%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 161
+Buy Trades: 89
+Sell Trades: 72
+Total Transaction Costs: ₹4,257.81
+Average Cost per Trade: ₹26.45
+
+🎯 TRADING ACCURACY:
+Winning Trades: 60
+Losing Trades: 12
+Win Rate: 83.33%
+Total Closed Trades: 72

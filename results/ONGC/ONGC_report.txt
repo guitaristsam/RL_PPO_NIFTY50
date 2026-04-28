@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR ONGC
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,987.51
+Final Portfolio Value: ₹22,396.50
+Total Return: 124.25%
+Annualized Return: 23.21%
+Volatility (Annualized): 30.23%
+Sharpe Ratio: 0.768
+Maximum Drawdown: -32.91%
+Trading Days: 975
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,987.51
+Final Portfolio Value: ₹21,069.72
+Total Return: 110.96%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 124.25%
+Buy & Hold Return: 110.96%
+Outperformance: 13.28%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 63
+Buy Trades: 30
+Sell Trades: 33
+Total Transaction Costs: ₹969.50
+Average Cost per Trade: ₹15.39
+
+🎯 TRADING ACCURACY:
+Winning Trades: 33
+Losing Trades: 0
+Win Rate: 100.00%
+Total Closed Trades: 33

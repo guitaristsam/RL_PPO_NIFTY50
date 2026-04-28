@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR INDUSINDBK
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,120.39
+Final Portfolio Value: ₹9,873.02
+Total Return: -2.44%
+Annualized Return: -0.62%
+Volatility (Annualized): 21.95%
+Sharpe Ratio: -0.028
+Maximum Drawdown: -34.28%
+Trading Days: 1010
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,120.39
+Final Portfolio Value: ₹8,607.09
+Total Return: -14.95%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -2.44%
+Buy & Hold Return: -14.95%
+Outperformance: 12.51%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 69
+Buy Trades: 36
+Sell Trades: 33
+Total Transaction Costs: ₹1,460.38
+Average Cost per Trade: ₹21.16
+
+🎯 TRADING ACCURACY:
+Winning Trades: 12
+Losing Trades: 21
+Win Rate: 36.36%
+Total Closed Trades: 33

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TECHM
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹8,379.62
+Total Return: -16.20%
+Annualized Return: -6.23%
+Volatility (Annualized): 11.69%
+Sharpe Ratio: -0.534
+Maximum Drawdown: -23.51%
+Trading Days: 692
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,355.58
+Total Return: 43.56%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -16.20%
+Buy & Hold Return: 43.56%
+Outperformance: -59.76%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 71
+Buy Trades: 38
+Sell Trades: 33
+Total Transaction Costs: ₹1,065.93
+Average Cost per Trade: ₹15.01
+
+🎯 TRADING ACCURACY:
+Winning Trades: 18
+Losing Trades: 15
+Win Rate: 54.55%
+Total Closed Trades: 33

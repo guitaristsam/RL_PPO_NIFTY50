@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TRENT
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,005.08
+Total Return: 30.05%
+Annualized Return: 8.92%
+Volatility (Annualized): 13.41%
+Sharpe Ratio: 0.665
+Maximum Drawdown: -15.99%
+Trading Days: 775
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹54,084.09
+Total Return: 440.84%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 30.05%
+Buy & Hold Return: 440.84%
+Outperformance: -410.79%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 61
+Buy Trades: 30
+Sell Trades: 31
+Total Transaction Costs: ₹1,318.77
+Average Cost per Trade: ₹21.62
+
+🎯 TRADING ACCURACY:
+Winning Trades: 20
+Losing Trades: 11
+Win Rate: 64.52%
+Total Closed Trades: 31

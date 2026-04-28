@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR ICICIBANK
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,414.64
+Total Return: 44.15%
+Annualized Return: 9.44%
+Volatility (Annualized): 15.37%
+Sharpe Ratio: 0.614
+Maximum Drawdown: -19.32%
+Trading Days: 1022
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹22,342.79
+Total Return: 123.43%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 44.15%
+Buy & Hold Return: 123.43%
+Outperformance: -79.28%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 80
+Buy Trades: 41
+Sell Trades: 39
+Total Transaction Costs: ₹1,470.41
+Average Cost per Trade: ₹18.38
+
+🎯 TRADING ACCURACY:
+Winning Trades: 32
+Losing Trades: 7
+Win Rate: 82.05%
+Total Closed Trades: 39

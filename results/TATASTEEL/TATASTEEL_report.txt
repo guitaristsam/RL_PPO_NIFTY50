@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TATASTEEL
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹9,844.69
+Final Portfolio Value: ₹20,548.00
+Total Return: 108.72%
+Annualized Return: 17.80%
+Volatility (Annualized): 24.76%
+Sharpe Ratio: 0.719
+Maximum Drawdown: -26.18%
+Trading Days: 1132
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹9,844.69
+Final Portfolio Value: ₹25,232.61
+Total Return: 156.31%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 108.72%
+Buy & Hold Return: 156.31%
+Outperformance: -47.59%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 150
+Buy Trades: 68
+Sell Trades: 82
+Total Transaction Costs: ₹2,565.63
+Average Cost per Trade: ₹17.10
+
+🎯 TRADING ACCURACY:
+Winning Trades: 52
+Losing Trades: 30
+Win Rate: 63.41%
+Total Closed Trades: 82

@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR BAJAJ
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,142.55
+Final Portfolio Value: ₹9,122.82
+Total Return: -10.05%
+Annualized Return: -4.17%
+Volatility (Annualized): 14.70%
+Sharpe Ratio: -0.284
+Maximum Drawdown: -28.92%
+Trading Days: 627
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,142.55
+Final Portfolio Value: ₹19,968.14
+Total Return: 96.87%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -10.05%
+Buy & Hold Return: 96.87%
+Outperformance: -106.93%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 47
+Buy Trades: 23
+Sell Trades: 24
+Total Transaction Costs: ₹882.58
+Average Cost per Trade: ₹18.78
+
+🎯 TRADING ACCURACY:
+Winning Trades: 17
+Losing Trades: 7
+Win Rate: 70.83%
+Total Closed Trades: 24

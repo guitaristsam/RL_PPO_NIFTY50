@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR SHRIRAMFIN
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,026.95
+Final Portfolio Value: ₹26,273.28
+Total Return: 162.03%
+Annualized Return: 29.18%
+Volatility (Annualized): 35.15%
+Sharpe Ratio: 0.830
+Maximum Drawdown: -38.54%
+Trading Days: 948
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,026.95
+Final Portfolio Value: ₹26,234.65
+Total Return: 161.64%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 162.03%
+Buy & Hold Return: 161.64%
+Outperformance: 0.39%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 1
+Buy Trades: 1
+Sell Trades: 0
+Total Transaction Costs: ₹24.85
+Average Cost per Trade: ₹24.85
+
+🎯 TRADING ACCURACY:
+Winning Trades: 0
+Losing Trades: 0
+Win Rate: 0.00%
+Total Closed Trades: 0

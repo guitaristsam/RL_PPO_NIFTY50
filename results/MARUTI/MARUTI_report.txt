@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR MARUTI
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹12,802.29
+Total Return: 28.02%
+Annualized Return: 7.99%
+Volatility (Annualized): 14.48%
+Sharpe Ratio: 0.552
+Maximum Drawdown: -16.12%
+Trading Days: 810
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,891.91
+Total Return: 48.92%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 28.02%
+Buy & Hold Return: 48.92%
+Outperformance: -20.90%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 47
+Buy Trades: 24
+Sell Trades: 23
+Total Transaction Costs: ₹1,267.11
+Average Cost per Trade: ₹26.96
+
+🎯 TRADING ACCURACY:
+Winning Trades: 18
+Losing Trades: 5
+Win Rate: 78.26%
+Total Closed Trades: 23
