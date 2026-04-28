@@ -121,3 +121,5 @@ MIT — see [`LICENSE`](LICENSE).
 - [`stable-baselines3`](https://github.com/DLR-RM/stable-baselines3) and [`sb3-contrib`](https://github.com/Stable-Baselines-Team/stable-baselines3-contrib) for PPO and RecurrentPPO.
 - [`FinRL`](https://github.com/AI4Finance-Foundation/FinRL) for `StockTradingEnv` (subclassed and patched here).
 - [`pandas-ta`](https://github.com/twopirllc/pandas-ta) for the indicator universe — and for the `lookahead=True` defaults that caused the original leakage hunt.
+#   R L _ P P O _ N I F T Y 5 0  
+ 
