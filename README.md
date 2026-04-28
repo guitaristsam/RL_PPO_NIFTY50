@@ -53,7 +53,7 @@ The full version-by-version history is in [`CLAUDE.md`](CLAUDE.md).
 
 ## Quick start
 
-Requires Python 3.10+ on Windows / Linux / Mac. NIFTY50 OHLCV daily CSVs are not in this repo (they're proprietary); set the `NIFTY50_PATH` constant in `Rl_v18.py` to point to your own directory of `{SYMBOL}_daily.csv` files with columns `datetime, open, high, low, close, volume`.
+Requires Python 3.10+ on Windows / Linux / Mac. NIFTY50 daily OHLCV CSVs (50 tickers, ~23 MB) ship with the repo under `data/`. To use your own data, set the `NIFTY50_PATH` env var to your directory of `{SYMBOL}_daily.csv` files (columns `datetime, open, high, low, close, volume`).
 
 ```bash
 # 1. install
@@ -85,6 +85,9 @@ v9_batch.py … v18_batch.py curated 5–7 stock subsets for fast iteration
 ensemble_predict.py        averages N v22-style trained seeds at test time
 summarize_results.py       post-run portfolio-level aggregation
 test_indicator_audit.py    static unittest preventing leakage regressions
+data/                      50 NIFTY50 daily OHLCV CSVs (used by default)
+results/                   per-stock report + account_value.csv + trades.csv
+                           from the latest 50-stock v18 sweep
 CLAUDE.md                  full version diary (v6 → v18) + bug history
 variants.md                v19–v23 hypotheses + run commands + diagnostics
 README.md                  this file

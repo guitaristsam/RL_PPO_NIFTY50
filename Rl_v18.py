@@ -54,7 +54,12 @@ warnings.filterwarnings('ignore')
 TRAINED_MODEL_DIR = "models"
 RESULTS_DIR = "results"
 CONSOLIDATED_REPORT = "consolidated_report.txt"
-NIFTY50_PATH = r"C:\Users\sambh\OneDrive\Desktop\Nifty50OHLCV" + "\\"
+# NIFTY50 OHLCV CSVs ship with the repo under ./data/ for full reproducibility.
+# Override with the NIFTY50_PATH env var if you keep your data elsewhere.
+NIFTY50_PATH = os.environ.get(
+    "NIFTY50_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data") + os.sep,
+)
 MIN_DATA_ROWS = 252  # Minimum 1 year of data after cleaning
 
 # Create directories if they don't exist
