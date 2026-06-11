@@ -31,6 +31,13 @@ ITC has Sharpe 1.36 with max DD only -15% over a 3.5-year out-of-sample window. 
 
 Per-stock reports, account value series, and trade logs are under `results/`. Run `python summarize_results.py` for the full sorted table.
 
+Statistical significance matters more than the headline table: with 50 stocks,
+~2.5 nominal winners at p<0.05 are expected by chance. `python significance.py`
+tests each stock's daily active return (Newey-West t-test, block bootstrap,
+Probabilistic Sharpe Ratio) and applies Benjamini-Hochberg FDR across the
+universe. On the current sweep **no stock survives FDR** — the stock-level wins
+above are candidates for forward testing, not demonstrated edge.
+
 ## Bugs that mattered
 
 The first version produced +1946% returns and Sharpe 6.58 on ADANIPORTS. None of it was real. Each fix was isolated to one variable.
@@ -76,6 +83,7 @@ python run_panel.py v18
 
 python summarize_results.py                      # post-run aggregation
 python summarize_results.py results_v18 results_v19   # baseline-vs-variant deltas
+python significance.py results_v18               # p-values, bootstrap CIs, PSR, FDR
 python test_indicator_audit.py                   # static leakage check (fast)
 python test_indicator_causality.py               # dynamic leakage audit (~1 min)
 python test_variant_envs.py                      # env-level reward/action math checks
@@ -94,6 +102,7 @@ run_panel.py              runs a variant over a fixed 10-stock panel
 v9_batch.py … v18_batch.py   curated stock subsets
 ensemble_predict.py       averages N v22 seeds at test time
 summarize_results.py      portfolio-level aggregation + baseline-vs-variant compare
+significance.py           active-return significance: NW t-test, bootstrap, PSR, FDR
 test_indicator_audit.py   static leakage check (known-bad indicator names)
 test_indicator_causality.py  dynamic leakage audit (train-prefix recompute)
 test_variant_envs.py      v19 reward / v21 action math vs env internals
