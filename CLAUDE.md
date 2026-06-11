@@ -30,8 +30,9 @@ Single-file PPO trading system for NIFTY50 daily bars. The codebase has gone thr
 | `Rl_v23.py` | unrun queue | v18 + warmup=150k, eval_freq=25k. All eligible evals at 150k/175k/200k. |
 | `ensemble_predict.py` | helper | Loads N v22-style models for one stock, averages continuous actions on a shared eval env. ~110 lines. Depends on SB3's `VecNormalize.normalize_obs/unnormalize_obs`. |
 | `Rl_v24.py` | unrun queue (smoke-tested) | Pooled cross-stock training: one policy over all NIFTY50 stocks, random 252-bar episode windows, `PooledValidationCallback` scoring mean val return over the 10-stock panel. 2M timesteps. Outputs to `results_v24/` / `models_v24/`. 3-stock/20k-step smoke run passed end-to-end 2026-06-11. |
+| `Rl_v26.py` | unrun queue | v18 + indicator list cut 98 → 22 curated names (observation 101 → 25 dims). Anti-overfit lever; single variable: feature count. |
 | `run_panel.py` | helper | Runs one `Rl_vN` variant over the fixed 10-stock comparison panel; redirects outputs to `results_<ver>/`, `models_<ver>/` via env vars. |
-| `variants.md` | docs | One section per v19–v24. Hypothesis, code change summary, run command, diagnostic. Plus a DESIGN ONLY v25 proposal (DD-deepening-from-max). |
+| `variants.md` | docs | One section per v19–v24 and v26. Hypothesis, code change summary, run command, diagnostic. Plus a DESIGN ONLY v25 proposal (DD-deepening-from-max). |
 | `summarize_results.py` | helper | After a run, parses every `results/{SYMBOL}/{SYMBOL}_report.txt` and prints a sorted outperformance table. |
 | `significance.py` | helper | Statistical significance of daily active returns (PPO − B&H) per stock: Newey-West t-test, circular block bootstrap (p + 95% CI), Probabilistic Sharpe Ratio, then Benjamini-Hochberg FDR across stocks. On the pre-fix 50-stock sweep: 1/49 nominal p<0.05 (~2.5 expected by chance), 0/49 survive FDR — no statistically demonstrable edge yet. Does NOT correct for the ~20 versions tried (would need Deflated Sharpe with the full trial record). |
 | `baselines.py` | helper | Dumb-strategy battery on the same test dates + cost model as PPO: SMA20/50 crossover and 126-day momentum, all-in/all-out, integer shares, 0.25%/side. Pre-fix sweep verdict: PPO beats SMA on 23/49 and MOM on 24/49 (coin flip), and PPO's mean outperformance (−59.6pp) is worse than the SMA rule's (−42.6pp). The LSTM is not yet earning its complexity. |
@@ -261,6 +262,7 @@ Single-variable forks of v18. Hypothesis, target stock, and diagnostic for each 
 3. v20, best-by-Sharpe in `ValidationCallback`. Targets INFY-style high-variance overfit by filtering val winners on risk-adjusted return.
 4. v21, target-exposure action. Action ∈ [0, 1] = target capital fraction. Decouples credit assignment from price level.
 5. v23, warmup=150k, eval_freq=25k. Forces all eligible evals into the 150k–200k range. Speculative; only worth running if v17/v18's warmup ideas need refinement.
+6. v26, feature reduction (98 → 22 indicators, observation 101 → 25 dims). Cheapest untested anti-overfit lever; run early — if EV stops pegging at 0.99 and val curves stop decaying past 100k, it should be layered under every later variant.
 
 ### Designed (DESIGN ONLY in `variants.md`, not implemented)
 

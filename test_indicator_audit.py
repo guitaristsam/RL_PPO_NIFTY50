@@ -47,7 +47,7 @@ KNOWN_LEAKAGE = {
 ACTIVE_MODULES = [
     "Rl_v8", "Rl_v9", "Rl_v10", "Rl_v11", "Rl_v12", "Rl_v13", "Rl_v14",
     "Rl_v15", "Rl_v16", "Rl_v17", "Rl_v18", "Rl_v19", "Rl_v20", "Rl_v21",
-    "Rl_v22", "Rl_v23", "Rl_v24",
+    "Rl_v22", "Rl_v23", "Rl_v24", "Rl_v26",
 ]
 
 

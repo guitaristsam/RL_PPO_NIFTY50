@@ -227,6 +227,36 @@ per-stock test → consolidated report). Full 2M-step run not yet done.
 
 ---
 
+## Rl_v26.py — feature reduction (98 → 22 indicators)
+
+**Hypothesis.** Explained variance pegs at 0.95–0.99 on every stock while test
+returns lag — textbook critic overfit — and a 101-dim observation against
+~2,500 train bars per stock is data-starved. Cutting to 22 curated indicators
+(25-dim observation) attacks the overfit at the source. Cheapest untested
+anti-overfit lever; complements v24 (which attacks the same problem from the
+data side).
+
+**Code change.** (single-variable vs v18: the indicator list only)
+- `list_of_indicators` cut from 98 to 22 names, all a subset of v18's
+  audited-causal list: trend (ADX/DM, MACD, AroonOsc, SuperTrend direction),
+  momentum (RSI, ROC, MOM, CMO, Stoch %K, Williams %R, TSI), volatility
+  (ATR, NATR, BB%, STDEV), volume (MFI, CMF, EFI), LOGRET_1.
+- Everything else byte-identical to v18 (env, reward, callback, splits).
+
+**How to run.**
+```bash
+python run_panel.py v26
+```
+
+**Diagnostic to look for.**
+- Validation-curve shape: if val returns stop decaying after their 100k peak
+  (v18's overfit signature), the reduction is working.
+- Training EV: should end BELOW v18's 0.95–0.99. If still pegged, the critic
+  is overfitting time-of-episode structure, not feature noise.
+- INFY / HDFCBANK are priority reads — the two clearest overfit casualties.
+
+---
+
 ## DESIGN ONLY — proposed v25 (do NOT implement without confirming results from v19–v23)
 
 **v25: smoother DD penalty (DD-deepening only).**
