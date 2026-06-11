@@ -1,6 +1,10 @@
 # Trained artifacts (regenerable, large)
 models/
+models_*/
 runs/
+
+# Run logs (scratch)
+*.log
 
 # Python
 __pycache__/

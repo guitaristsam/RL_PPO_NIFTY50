@@ -18,6 +18,11 @@ Optionally pass a results dir override:
 
     python summarize_results.py results_v19/
 
+Or pass TWO results dirs to compare a variant against a baseline (per-stock
+outperformance delta, sorted by improvement):
+
+    python summarize_results.py results_v18/ results_v19/
+
 Output is plain text — easy to paste into a CV bullet or a README.
 """
 
@@ -58,12 +63,7 @@ def parse_report(path):
     )
 
 
-def main():
-    results_dir = sys.argv[1] if len(sys.argv) > 1 else "results"
-    if not os.path.isdir(results_dir):
-        print(f"results directory '{results_dir}' not found.")
-        sys.exit(1)
-
+def collect_rows(results_dir):
     rows = []
     for d in sorted(os.listdir(results_dir)):
         full = os.path.join(results_dir, d)
@@ -73,6 +73,53 @@ def main():
         row = parse_report(report_path)
         if row is not None:
             rows.append(row)
+    return rows
+
+
+def compare(baseline_dir, variant_dir):
+    """Per-stock outperformance delta (variant − baseline), sorted by lift."""
+    base = {r.stock: r for r in collect_rows(baseline_dir)}
+    var = {r.stock: r for r in collect_rows(variant_dir)}
+    common = sorted(set(base) & set(var))
+    if not common:
+        print("No stocks present in both results dirs.")
+        sys.exit(1)
+
+    deltas = [(s, var[s].outperf - base[s].outperf) for s in common]
+    deltas.sort(key=lambda x: -x[1])
+
+    print(f"{'stock':<12} {'base outpf':>11} {'var outpf':>11} {'delta':>10}")
+    print("-" * 48)
+    for s, d in deltas:
+        print(f"{s:<12} {base[s].outperf:>+10.2f}pp {var[s].outperf:>+10.2f}pp "
+              f"{d:>+9.2f}pp")
+    print("-" * 48)
+    n_up = sum(1 for _, d in deltas if d > 0)
+    avg = sum(d for _, d in deltas) / len(deltas)
+    print(f"Improved: {n_up}/{len(deltas)}   avg delta: {avg:+.2f}pp")
+    only_base = sorted(set(base) - set(var))
+    only_var = sorted(set(var) - set(base))
+    if only_base:
+        print(f"Only in {baseline_dir}: {', '.join(only_base)}")
+    if only_var:
+        print(f"Only in {variant_dir}: {', '.join(only_var)}")
+
+
+def main():
+    if len(sys.argv) > 2:
+        for d in sys.argv[1:3]:
+            if not os.path.isdir(d):
+                print(f"results directory '{d}' not found.")
+                sys.exit(1)
+        compare(sys.argv[1], sys.argv[2])
+        return
+
+    results_dir = sys.argv[1] if len(sys.argv) > 1 else "results"
+    if not os.path.isdir(results_dir):
+        print(f"results directory '{results_dir}' not found.")
+        sys.exit(1)
+
+    rows = collect_rows(results_dir)
 
     if not rows:
         print(f"No parseable per-stock reports found under {results_dir}/.")

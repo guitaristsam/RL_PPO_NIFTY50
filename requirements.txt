@@ -1,5 +1,5 @@
 # Core
-numpy>=1.24,<3
+numpy>=1.24,<2.3  # numba (pandas-ta transitive dep) caps numpy at 2.2.x
 pandas>=2.0
 pandas-ta>=0.3.14b0
 scikit-learn>=1.3

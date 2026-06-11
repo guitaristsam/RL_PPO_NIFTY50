@@ -1,32 +1,46 @@
 """
-v23: longer warmup + finer eval cadence in ValidationCallback.
+Rl_v24.py — POOLED CROSS-STOCK TRAINING (single policy over all NIFTY50 stocks).
 
-Hypothesis: v18 set warmup_steps=100k and eval_freq=50k, giving evals at 100k,
-150k, 200k — three eligibility points across the full training run. v17's
-HDFCBANK regression motivated the warmup, but the cadence is still too coarse:
-in late training the policy can briefly hit a peak between 150k and 200k that
-v18 misses. With warmup_steps=150k and eval_freq=25k, evaluations occur at
-150k, 175k, 200k — the same three-point coverage but pushed entirely into the
-post-warmup window where the policy is converged enough to be a real
-candidate.
+HYPOTHESIS
+    v18 trains one 128-hidden LSTM per stock on ~2,500 daily bars — data-starved
+    for a 101-dim observation, which is why 43/50 stocks lose to B&H. Pool ALL
+    stocks into ONE policy: each training episode is a random 252-bar window from
+    a random stock's train slice. ~50x the data, exposure to many regimes, one
+    model instead of 50. Standard move in portfolio-RL literature.
 
-Single-variable change vs v18: ONLY ValidationCallback's eval_freq (50k → 25k)
-and warmup_steps (100k → 150k). Algorithm, reward, splits, hyperparameters,
-LSTM architecture all unchanged.
+CODE CHANGE vs v18 (single-variable: pooling only)
+    - build_pooled_data(): runs v18's per-stock pipeline for every stock, takes
+      the INTERSECTION of indicator names so all envs share one observation
+      shape, precomputes per-stock hmax.
+    - PooledTradingEnv: each reset() samples a random symbol + random contiguous
+      252-date window from its train slice and delegates to a fresh
+      IntegerTradingEnv (the v18 env, reward and all). Dedicated default_rng,
+      not global numpy state.
+    - PooledValidationCallback: every eval, run the deterministic policy over the
+      FULL val window of each of the 10 PANEL stocks; score = mean val return
+      across panel stocks with trades >= min_val_trades; require >= 6/10 eligible.
+    - train_pooled / test_pooled: ONE global VecNormalize, ONE RecurrentPPO at
+      TOTAL_TIMESTEPS=2_000_000; at test, the single model is run over every
+      stock's test slice. Fix-1 vecnorm-snapshot logic retained.
 
-Expected effect: less variance in selected-checkpoint quality. Stocks where
-v18's "best" was the @100k early-warmup checkpoint should benefit most. Worst
-case (no transient late peak): v23 ties v18, since the @200k final checkpoint
-is reachable in both schedules. Diagnose by comparing the ValidationCallback
-eval_history list — if v23 picks @175k or @200k while v18 picked @100k, the
-hypothesis is in play.
+HOW TO RUN
+    python Rl_v24.py                       # full pooled run -> results_v24/
+    V24_STOCKS="RELIANCE,INFY,ITC" \
+      TOTAL_TIMESTEPS=20000 V24_WARMUP=0 V24_EVAL_FREQ=10000 \
+      V24_LOG_RESETS=1 python Rl_v24.py    # smoke test
+    Outputs default to results_v24/ and models_v24/ (env-overridable).
 
-Why this beats v18 if successful: keeps the warmup safety net but shifts ALL
-eligible evaluations into the high-quality late-training region. Cost is more
-validation passes per run (O(val_steps) each), but warmup_steps=150k means we
-also skip more pre-warmup evals, so wall-clock impact is small.
+DIAGNOSTICS
+    - Inner-reset symbol logged when V24_LOG_RESETS is set (smoke).
+    - Per-panel val returns printed at each eval; degenerate evals (< 6/10
+      eligible) are skipped, mirroring v18's degenerate-policy guard.
+
+KNOWN CAVEAT (do NOT fix in v24 — single-variable discipline)
+    Raw price / cash / holdings magnitudes differ across stocks and are handled
+    ONLY by the global VecNormalize. A follow-up (v25) could make the observation
+    fully scale-free (price / rolling MA, holdings as exposure fraction). v24 is
+    pooling only.
 """
-
 import os
 # Memory / thread caps — must be set BEFORE numpy / torch / TF import.
 # Heavy multi-threaded BLAS + multi-process pandas_ta workers were each
@@ -45,6 +59,8 @@ import time
 import random
 import sys
 import warnings
+import contextlib
+import io
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 import numpy as np
@@ -81,9 +97,17 @@ warnings.filterwarnings('ignore')
 # Configuration
 # Overridable per experiment so variant runs don't collide with the v18
 # baseline outputs (resume guard would otherwise skip every stock).
-TRAINED_MODEL_DIR = os.environ.get("TRAINED_MODEL_DIR", "models")
-RESULTS_DIR = os.environ.get("RESULTS_DIR", "results")
-CONSOLIDATED_REPORT = os.environ.get("CONSOLIDATED_REPORT", "consolidated_report.txt")
+TRAINED_MODEL_DIR = os.environ.get("TRAINED_MODEL_DIR", "models_v24")
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "results_v24")
+CONSOLIDATED_REPORT = os.environ.get("CONSOLIDATED_REPORT", "consolidated_report_v24.txt")
+
+# Pooled-training timestep budget (override via env for smoke tests).
+TOTAL_TIMESTEPS = int(os.environ.get("TOTAL_TIMESTEPS", 2_000_000))
+# Panel of stocks scored by the pooled validation callback (matches run_panel.py).
+PANEL = [
+    "RELIANCE", "INFY", "TATAMOTORS", "ITC", "ADANIENT",
+    "HDFCBANK", "TCS", "SBIN", "AXISBANK", "HINDALCO",
+]
 # NIFTY50 OHLCV CSVs ship with the repo under ./data/ for full reproducibility.
 # Override with the NIFTY50_PATH env var if you keep your data elsewhere.
 NIFTY50_PATH = os.environ.get(
@@ -631,12 +655,8 @@ class ValidationCallback(BaseCallback):
     """
 
     def __init__(self, val_df, tech_indicators, hmax_value, train_vec_normalize,
-                 eval_freq=25000, save_path='best_model.zip', initial_amount=10000,
-                 min_val_trades=5, warmup_steps=150000, verbose=1):
-        # v23: defaults shifted from (50k, 100k) to (25k, 150k). Eligible evals
-        # now happen at 150k / 175k / 200k — same three-point coverage as v18,
-        # but pushed entirely into the post-warmup region where the policy is
-        # converged. See module docstring for the full hypothesis.
+                 eval_freq=50000, save_path='best_model.zip', initial_amount=10000,
+                 min_val_trades=5, warmup_steps=100000, verbose=1):
         super().__init__(verbose)
         self.val_df = val_df
         self.tech_indicators = tech_indicators
@@ -829,17 +849,14 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
                 tech_indicators=tech_indicators,
                 hmax_value=hmax_value,
                 train_vec_normalize=env_train,
-                # v23: eval every 25k steps with a 150k warmup → eligible
-                # evals at 150k / 175k / 200k.
-                eval_freq=25000,
-                warmup_steps=150000,
+                eval_freq=50000,
                 save_path=best_path,
                 initial_amount=10000,
                 verbose=1,
             )
             callbacks.append(val_cb)
-            print(f"  Validation callback enabled: eval every 25k steps "
-                  f"(warmup 150k), best checkpoint -> {best_path}")
+            print(f"  Validation callback enabled: eval every 50k steps, "
+                  f"best checkpoint -> {best_path}")
         else:
             print("  No val_df supplied — training without early stopping.")
 
@@ -1464,50 +1481,436 @@ def generate_consolidated_report(stock_results):
     print(f"CONSOLIDATED REPORT SAVED TO: {CONSOLIDATED_REPORT}")
     print("="*80)
 
+# ======================
+# v24 POOLED CROSS-STOCK TRAINING
+# ======================
+def _quiet_env(df, tech_indicators, hmax, initial_amount=10000):
+    """create_trading_environment with its per-build prints suppressed — called
+    thousands of times (once per pooled reset / val eval), so the FinRL setup
+    chatter would otherwise flood the log."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        return create_trading_environment(
+            df, tech_indicators, initial_amount=initial_amount, hmax=hmax
+        )
+
+
+def _prepare_one_stock(file_path):
+    """Run v18's per-stock pipeline (indicators -> NaN handling -> 70/15/15
+    chronological split -> RobustScaler fit on train, applied to val/test) and
+    return the scaled frames + the stock's tech-indicator names + price-aware
+    hmax. Returns None if the stock has < MIN_DATA_ROWS bars. Pure data prep —
+    no training, no I/O. Mirrors steps 1-6 of v18's process_stock."""
+    stock_name = os.path.basename(file_path).split("_")[0]
+    df = pd.read_csv(file_path)
+    if 'datetime' in df.columns:
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        df = df.set_index('datetime').sort_index()
+    df['symbol'] = stock_name
+    try:
+        df.ta.cores = 0
+    except Exception:
+        pass
+    df.ta.study(ta.AllStudy, cores=0)
+    basic_cols = ['symbol', 'open', 'high', 'low', 'close', 'volume']
+    existing_indicators = [c for c in list_of_indicators if c in df.columns]
+    df = df[basic_cols + existing_indicators]
+    df, _ = handle_nan_per_stock(df)
+    if len(df) < MIN_DATA_ROWS:
+        print(f"  {stock_name}: insufficient data ({len(df)} rows) — skipped")
+        return None
+
+    processed_raw, tech_indicators, _ = prepare_data_for_finrl(df, skip_scaling=True)
+    unique_dates = sorted(processed_raw['date'].unique())
+    train_end = int(len(unique_dates) * 0.70)
+    val_end = int(len(unique_dates) * 0.85)
+    train_split_date = unique_dates[train_end]
+    val_split_date = unique_dates[val_end]
+
+    train_raw = processed_raw[processed_raw['date'] < train_split_date].reset_index(drop=True)
+    val_raw = processed_raw[(processed_raw['date'] >= train_split_date) &
+                            (processed_raw['date'] < val_split_date)].reset_index(drop=True)
+    test_raw = processed_raw[processed_raw['date'] >= val_split_date].reset_index(drop=True)
+
+    train_df, _, scalers = prepare_data_for_finrl(train_raw, scalers=None, skip_scaling=False)
+    val_df, _, _ = prepare_data_for_finrl(val_raw, scalers=scalers, skip_scaling=False)
+    test_df, _, _ = prepare_data_for_finrl(test_raw, scalers=scalers, skip_scaling=False)
+
+    median_train_close = float(train_df['close'].median())
+    hmax = int(max(2, min(200, 10000 // median_train_close))) if median_train_close > 0 else 10
+    return {
+        'symbol': stock_name,
+        'train_df': train_df, 'val_df': val_df, 'test_df': test_df,
+        'tech_indicators': tech_indicators, 'hmax': hmax,
+    }
+
+
+def build_pooled_data():
+    """Load every stock, compute the INTERSECTION of indicator names so all envs
+    share one observation shape, subset every frame to it, and precompute
+    per-stock hmax. Returns (pooled_dict, common_indicators). Honours the
+    V24_STOCKS env var (comma-separated) for smoke tests."""
+    files = sorted(glob.glob(os.path.join(NIFTY50_PATH, "*_daily.csv")))
+    subset = os.environ.get("V24_STOCKS")
+    if subset:
+        wanted = {s.strip().upper() for s in subset.split(",") if s.strip()}
+        files = [f for f in files if os.path.basename(f).split("_")[0].upper() in wanted]
+        print(f"V24_STOCKS set — pooling only {sorted(wanted)} ({len(files)} files)")
+    if not files:
+        raise RuntimeError("No stock files found for pooled training.")
+
+    pooled = {}
+    ind_sets = []
+    for fp in files:
+        prep = _prepare_one_stock(fp)
+        if prep is None:
+            continue
+        pooled[prep['symbol']] = prep
+        ind_sets.append(set(prep['tech_indicators']))
+    if not pooled:
+        raise RuntimeError("No stocks survived data preparation.")
+
+    common_indicators = sorted(set.intersection(*ind_sets))
+    if not common_indicators:
+        raise RuntimeError("Indicator intersection across stocks is empty.")
+
+    keep_meta = ['date', 'tic', 'open', 'high', 'low', 'close', 'volume']
+    state_spaces = set()
+    for sym, d in pooled.items():
+        for k in ('train_df', 'val_df', 'test_df'):
+            d[k] = d[k][keep_meta + common_indicators].reset_index(drop=True)
+        d['tech_indicators'] = common_indicators
+        # single-stock env: state = 1 cash + 2*1 (price, shares) + N indicators
+        state_spaces.add(1 + 2 * 1 + len(common_indicators))
+    assert len(state_spaces) == 1, (
+        f"Inconsistent observation shape across stocks: {state_spaces}. "
+        "All pooled envs must share an identical state_space."
+    )
+    print(f"Pooled {len(pooled)} stocks; {len(common_indicators)} common indicators; "
+          f"state_space={next(iter(state_spaces))}")
+    return pooled, common_indicators
+
+
+class PooledTradingEnv(gym.Env):
+    """One episode = a random EPISODE_LEN-date window from a random stock's train
+    slice, delegated to a fresh IntegerTradingEnv (the v18 env + reward). Uses a
+    dedicated np.random.default_rng so sampling stays reproducible independent of
+    any library-internal global-numpy calls."""
+    metadata = {"render_modes": []}
+
+    def __init__(self, pooled, common_indicators, episode_len=252,
+                 initial_amount=10000, seed=42):
+        super().__init__()
+        self.common_indicators = common_indicators
+        self.episode_len = episode_len
+        self.initial_amount = initial_amount
+        self.rng = np.random.default_rng(seed)
+        self._log_resets = bool(os.environ.get("V24_LOG_RESETS"))
+
+        # Pool only stocks whose train slice has > episode_len dates.
+        self.pool = {}
+        for sym, d in pooled.items():
+            dates = sorted(d['train_df']['date'].unique())
+            if len(dates) > episode_len:
+                self.pool[sym] = {'train_df': d['train_df'], 'dates': dates,
+                                  'hmax': d['hmax']}
+        if not self.pool:
+            raise RuntimeError(
+                f"No stock has > {episode_len} train dates; lower episode_len.")
+        self.symbols = sorted(self.pool.keys())
+
+        # Probe env to copy spaces (identical across stocks by construction).
+        probe = _quiet_env(self.pool[self.symbols[0]]['train_df'],
+                           self.common_indicators, self.pool[self.symbols[0]]['hmax'],
+                           self.initial_amount)
+        self.observation_space = probe.observation_space
+        self.action_space = probe.action_space
+        self._inner = None
+
+    def _new_episode_env(self):
+        sym = self.symbols[int(self.rng.integers(0, len(self.symbols)))]
+        entry = self.pool[sym]
+        dates = entry['dates']
+        start = int(self.rng.integers(0, len(dates) - self.episode_len + 1))
+        window = set(dates[start:start + self.episode_len])
+        slice_df = entry['train_df'][entry['train_df']['date'].isin(window)].reset_index(drop=True)
+        if self._log_resets:
+            print(f"    [pooled reset] symbol={sym} "
+                  f"window={dates[start]}..{dates[start + self.episode_len - 1]}")
+        return _quiet_env(slice_df, self.common_indicators, entry['hmax'],
+                          self.initial_amount)
+
+    def reset(self, *, seed=None, options=None):
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+        self._inner = self._new_episode_env()
+        return self._inner.reset()
+
+    def step(self, action):
+        return self._inner.step(action)
+
+
+def _eval_policy_on_window(model, val_df, tech_indicators, hmax, train_vn,
+                           initial_amount=10000):
+    """Deterministic rollout of `model` over the full `val_df` window, obs
+    normalised by a frozen deep-copy of the live train VecNormalize stats.
+    Returns (return_pct, trade_count). Standalone copy of v18
+    ValidationCallback._eval_on_val."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        val_env_vec = DummyVecEnv([lambda: create_trading_environment(
+            val_df, tech_indicators, initial_amount=initial_amount, hmax=hmax)])
+    val_vn = VecNormalize(val_env_vec, norm_obs=True, norm_reward=False,
+                          clip_obs=10.0, gamma=0.99)
+    val_vn.obs_rms = copy.deepcopy(train_vn.obs_rms)
+    val_vn.ret_rms = copy.deepcopy(train_vn.ret_rms)
+    val_vn.training = False
+    val_vn.norm_reward = False
+    underlying = val_vn.venv.envs[0]
+
+    obs = val_vn.reset()
+    lstm_states = None
+    episode_starts = np.ones((1,), dtype=bool)
+    max_steps = len(sorted(val_df['date'].unique())) - 1
+    prev_shares = np.array(
+        underlying.state[1 + underlying.stock_dim: 1 + 2 * underlying.stock_dim],
+        dtype=np.int64).copy()
+    trade_count = 0
+    done = False
+    step_count = 0
+    while not done and step_count < max_steps:
+        action, lstm_states = model.predict(
+            obs, state=lstm_states, episode_start=episode_starts, deterministic=True)
+        episode_starts = np.zeros((1,), dtype=bool)
+        obs, rewards, dones, infos = val_vn.step(action)
+        done = bool(dones[0])
+        cur_shares = np.array(
+            underlying.state[1 + underlying.stock_dim: 1 + 2 * underlying.stock_dim],
+            dtype=np.int64)
+        trade_count += int(np.sum(cur_shares != prev_shares))
+        prev_shares = cur_shares.copy()
+        step_count += 1
+
+    final_value = float(getattr(underlying, 'total_asset', initial_amount))
+    return (final_value / initial_amount - 1.0) * 100.0, trade_count
+
+
+class PooledValidationCallback(BaseCallback):
+    """Every eval_freq steps after warmup, run the deterministic policy over the
+    FULL val window of each PANEL stock. Score = mean val return across panel
+    stocks with trades >= min_val_trades; require >= min_eligible of them, else
+    the eval is degenerate-skipped. Saves best checkpoint + vecnorm snapshot."""
+
+    def __init__(self, pooled, common_indicators, train_vec_normalize, panel,
+                 eval_freq, warmup_steps, save_path, initial_amount=10000,
+                 min_val_trades=5, min_eligible=6, verbose=1):
+        super().__init__(verbose)
+        self.pooled = pooled
+        self.common_indicators = common_indicators
+        self.train_vn = train_vec_normalize
+        self.panel = [s for s in panel if s in pooled]
+        self.eval_freq = eval_freq
+        self.warmup_steps = warmup_steps
+        self.save_path = save_path
+        self.initial_amount = initial_amount
+        self.min_val_trades = min_val_trades
+        # With a narrowed panel (smoke test) require all of them, never > panel size.
+        self.min_eligible = min(min_eligible, len(self.panel))
+        self.best_score = -float('inf')
+        self.last_eval_step = 0
+        self.eval_history = []
+
+    def _on_step(self):
+        if self.num_timesteps - self.last_eval_step < self.eval_freq:
+            return True
+        self.last_eval_step = self.num_timesteps
+        if self.num_timesteps < self.warmup_steps:
+            if self.verbose:
+                print(f"  [val@{self.num_timesteps}] skipped (warmup ends at {self.warmup_steps})")
+            return True
+
+        per_stock = []
+        for sym in self.panel:
+            d = self.pooled[sym]
+            ret, trades = _eval_policy_on_window(
+                self.model, d['val_df'], self.common_indicators, d['hmax'],
+                self.train_vn, self.initial_amount)
+            per_stock.append((sym, ret, trades))
+
+        eligible = [(s, r) for (s, r, t) in per_stock if t >= self.min_val_trades]
+        if self.verbose:
+            summary = ", ".join(f"{s}:{r:+.1f}%({t})" for s, r, t in per_stock)
+            print(f"  [val@{self.num_timesteps}] {summary}")
+
+        if len(eligible) < self.min_eligible:
+            if self.verbose:
+                print(f"  [val@{self.num_timesteps}] only {len(eligible)}/{len(self.panel)} "
+                      f"eligible (< {self.min_eligible}) — degenerate, skipped")
+            self.eval_history.append((self.num_timesteps, None, len(eligible)))
+            return True
+
+        score = float(np.mean([r for _, r in eligible]))
+        self.eval_history.append((self.num_timesteps, score, len(eligible)))
+        if score > self.best_score:
+            self.best_score = score
+            self.model.save(self.save_path)
+            # Fix-1 pattern: snapshot the live VecNormalize stats with the checkpoint.
+            self.train_vn.save(self.save_path.replace('.zip', '_vecnorm.pkl'))
+            if self.verbose:
+                print(f"  [val@{self.num_timesteps}] mean_eligible_return={score:+.2f}% "
+                      f"({len(eligible)}/{len(self.panel)}) — NEW BEST (saved)")
+        elif self.verbose:
+            print(f"  [val@{self.num_timesteps}] mean_eligible_return={score:+.2f}% "
+                  f"(best {self.best_score:+.2f}%)")
+        return True
+
+
+def train_pooled(pooled, common_indicators, total_timesteps=None):
+    """One global VecNormalize + one RecurrentPPO over the pooled env. Restores
+    the best panel-val checkpoint (and its vecnorm snapshot) after .learn()."""
+    if total_timesteps is None:
+        total_timesteps = TOTAL_TIMESTEPS
+    warmup = int(os.environ.get("V24_WARMUP", 400_000))
+    eval_freq = int(os.environ.get("V24_EVAL_FREQ", 200_000))
+    episode_len = int(os.environ.get("V24_EPISODE_LEN", 252))
+
+    # VecNormalize.save in the callback uses a plain open(); make sure the
+    # directory exists before the first NEW-BEST checkpoint hours into the run.
+    os.makedirs(TRAINED_MODEL_DIR, exist_ok=True)
+
+    env_raw = DummyVecEnv([lambda: PooledTradingEnv(
+        pooled, common_indicators, episode_len=episode_len,
+        initial_amount=10000, seed=42)])
+    env_train = VecNormalize(env_raw, norm_obs=True, norm_reward=False,
+                             clip_obs=10.0, gamma=0.99)
+
+    log_dir = f"runs/v24_pooled_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(log_dir, exist_ok=True)
+
+    PPO_PARAMS = {
+        "learning_rate": 3e-4,
+        "n_steps": 512,
+        "batch_size": 64,
+        "n_epochs": 5,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_range": 0.2,
+        "normalize_advantage": True,
+        "ent_coef": 0.01,
+        "vf_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "verbose": 1,
+        "seed": 42,
+        "device": "auto",
+        "tensorboard_log": log_dir,
+        "policy_kwargs": {
+            "lstm_hidden_size": 128,
+            "n_lstm_layers": 1,
+            "shared_lstm": False,
+            "enable_critic_lstm": True,
+            "net_arch": [128],
+            "activation_fn": torch.nn.Tanh,
+        },
+    }
+
+    model = RecurrentPPO("MlpLstmPolicy", env_train, **PPO_PARAMS)
+    best_path = os.path.join(TRAINED_MODEL_DIR, "pooled_best.zip")
+    cb = PooledValidationCallback(
+        pooled, common_indicators, env_train, PANEL,
+        eval_freq=eval_freq, warmup_steps=warmup, save_path=best_path,
+        initial_amount=10000, verbose=1)
+
+    print(f"Pooled training: {total_timesteps} steps | eval_freq={eval_freq} | "
+          f"warmup={warmup} | episode_len={episode_len} | {len(cb.panel)} panel stocks")
+    model.learn(total_timesteps=total_timesteps, tb_log_name='v24_pooled',
+                progress_bar=True, callback=cb)
+
+    if os.path.exists(best_path):
+        print(f"Restoring best pooled checkpoint (score={cb.best_score:+.2f}%) from {best_path}")
+        best_vn_path = best_path.replace('.zip', '_vecnorm.pkl')
+        if os.path.exists(best_vn_path):
+            env_train = VecNormalize.load(best_vn_path, env_train.venv)
+            env_train.training = False
+            env_train.norm_reward = False
+            print(f"  Restored VecNormalize snapshot from {best_vn_path}")
+        else:
+            print("  WARNING: no vecnorm snapshot beside best checkpoint; "
+                  "using end-of-training stats.")
+        model = RecurrentPPO.load(best_path, env=env_train, device="auto")
+    else:
+        print("WARNING: no eligible val checkpoint saved; using final-iteration model.")
+    return model, env_train
+
+
+def test_pooled(model, env_train, pooled, common_indicators):
+    """Run the single pooled policy over every loaded stock's test slice (or the
+    V24_STOCKS subset), writing per-stock reports/CSVs and a consolidated report.
+    LSTM state resets between stocks (test_ppo_model starts each call fresh)."""
+    os.makedirs(TRAINED_MODEL_DIR, exist_ok=True)
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    model_path = os.path.join(TRAINED_MODEL_DIR, "pooled_ppo.zip")
+    model.save(model_path)
+    vecnorm_path = os.path.join(TRAINED_MODEL_DIR, "pooled_vecnorm.pkl")
+    env_train.save(vecnorm_path)
+    print(f"Saved pooled model -> {model_path}; vecnorm -> {vecnorm_path}")
+
+    subset = os.environ.get("V24_STOCKS")
+    if subset:
+        wanted = {s.strip().upper() for s in subset.split(",") if s.strip()}
+        symbols = [s for s in sorted(pooled) if s.upper() in wanted]
+    else:
+        symbols = sorted(pooled.keys())
+
+    results = []
+    for sym in symbols:
+        d = pooled[sym]
+        stock_result_dir = os.path.join(RESULTS_DIR, sym)
+        os.makedirs(stock_result_dir, exist_ok=True)
+        print(f"\n=== Testing pooled policy on {sym} ===")
+        df_account_value, df_actions, trade_logger = test_ppo_model(
+            model, d['test_df'], common_indicators, sym,
+            vecnorm_path=vecnorm_path, hmax_value=d['hmax'])
+        ppo_metrics, buy_hold_metrics, trade_summary = create_comprehensive_report(
+            df_account_value, trade_logger, d['test_df'], sym, stock_result_dir)
+        df_account_value.to_csv(os.path.join(stock_result_dir, "account_value.csv"), index=False)
+        df_actions.to_csv(os.path.join(stock_result_dir, "actions.csv"), index=False)
+        tb = trade_logger.get_trade_logbook()
+        if not tb.empty:
+            tb.to_csv(os.path.join(stock_result_dir, "trades.csv"), index=False)
+        results.append({
+            'stock': sym,
+            'final_value': ppo_metrics['end_value'],
+            'buy_hold_value': buy_hold_metrics['final_value'],
+            'win_rate': trade_summary['win_rate_pct'],
+            'transaction_costs': trade_summary['total_transaction_costs'],
+            'total_trades': trade_summary['total_trades'],
+            'closed_trades': trade_summary['total_closed_trades'],
+            'winning_trades': trade_summary['winning_trades'],
+        })
+    generate_consolidated_report(results)
+    return results
+
+
 def main():
-    """
-    Main execution function for portfolio processing
-    """
+    """v24: build pooled data -> train one pooled policy -> test it on every
+    stock. Single-variable change vs v18: pooling only."""
     print("\n" + "="*80)
-    print("NIFTY50 PORTFOLIO PPO TRADING SYSTEM")
+    print("NIFTY50 POOLED PPO TRADING SYSTEM (v24)")
     print("="*80)
     print(f"Data Directory: {NIFTY50_PATH}")
     print(f"Models Directory: {TRAINED_MODEL_DIR}")
     print(f"Results Directory: {RESULTS_DIR}")
-    print(f"Minimum Data Requirement: {MIN_DATA_ROWS} rows per stock\n")
-    
-    # Find all stock files
-    stock_files = glob.glob(os.path.join(NIFTY50_PATH, "*_daily.csv"))
-    if not stock_files:
-        print("No stock files found! Check directory path.")
-        return
-    
-    print(f"Found {len(stock_files)} stock files")
-    
-    stock_results = []
-    processed_count = 0
+    print(f"Total timesteps: {TOTAL_TIMESTEPS}\n")
+
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
+
     start_time = time.time()
-    
-    for file_path in stock_files:
-        stock_start = time.time()
-        result = process_stock(file_path)
-        
-        if result:
-            stock_results.append(result)
-            processed_count += 1
-            print(f"✅ Completed in {time.time() - stock_start:.1f} seconds")
-        else:
-            print(f"⚠️ Skipped {os.path.basename(file_path)}")
-    
-    # Generate consolidated report
-    generate_consolidated_report(stock_results)
-    
-    total_time = time.time() - start_time
+    pooled, common_indicators = build_pooled_data()
+    model, env_train = train_pooled(pooled, common_indicators)
+    test_pooled(model, env_train, pooled, common_indicators)
+
     print("\n" + "="*80)
-    print(f"PORTFOLIO PROCESSING COMPLETE!")
-    print(f"Stocks Processed: {processed_count}/{len(stock_files)}")
-    print(f"Total Time: {total_time/60:.1f} minutes")
-    print(f"Average per Stock: {total_time/processed_count:.1f} seconds" if processed_count else "")
+    print(f"v24 POOLED RUN COMPLETE in {(time.time() - start_time)/60:.1f} minutes")
     print("="*80)
 
 if __name__ == "__main__":

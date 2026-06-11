@@ -27,9 +27,13 @@ Single-file PPO trading system for NIFTY50 daily bars. The codebase has gone thr
 | `Rl_v22.py` | unrun queue | v18 + `seed_offset` parameter. Each seed saves to `{stock}_seed{N}_*`. Companion `ensemble_predict.py` averages N continuous actions per step. |
 | `Rl_v23.py` | unrun queue | v18 + warmup=150k, eval_freq=25k. All eligible evals at 150k/175k/200k. |
 | `ensemble_predict.py` | helper | Loads N v22-style models for one stock, averages continuous actions on a shared eval env. ~110 lines. Depends on SB3's `VecNormalize.normalize_obs/unnormalize_obs`. |
-| `variants.md` | docs | One section per v19–v23. Hypothesis, code change summary, run command, diagnostic. Plus a DESIGN ONLY v24 proposal (DD-deepening-from-max). |
+| `Rl_v24.py` | unrun queue (smoke-tested) | Pooled cross-stock training: one policy over all NIFTY50 stocks, random 252-bar episode windows, `PooledValidationCallback` scoring mean val return over the 10-stock panel. 2M timesteps. Outputs to `results_v24/` / `models_v24/`. 3-stock/20k-step smoke run passed end-to-end 2026-06-11. |
+| `run_panel.py` | helper | Runs one `Rl_vN` variant over the fixed 10-stock comparison panel; redirects outputs to `results_<ver>/`, `models_<ver>/` via env vars. |
+| `variants.md` | docs | One section per v19–v24. Hypothesis, code change summary, run command, diagnostic. Plus a DESIGN ONLY v25 proposal (DD-deepening-from-max). |
 | `summarize_results.py` | helper | After a run, parses every `results/{SYMBOL}/{SYMBOL}_report.txt` and prints a sorted outperformance table. |
-| `test_indicator_audit.py` | test | Unittest. Fails if any of v8–v23's `list_of_indicators` includes a known-leakage name. v6/v7 are exempt. |
+| `test_indicator_audit.py` | test | Unittest. Fails if any of v8–v24's `list_of_indicators` includes a known-leakage name. v6/v7 are exempt. |
+| `test_indicator_causality.py` | test | Dynamic leakage audit: computes kept indicators on the train prefix alone vs the full series and asserts prefix equality (causal indicators can't change when future rows are appended). One stock (RELIANCE, `CAUSALITY_SYMBOL` to override). Run when bumping pandas-ta or editing the indicator list. |
+| `test_variant_envs.py` | test | Env-level math checks, no training: v19's B&H-relative reward recomputed from env internals at every step; v21's target-exposure mapping (a=+1 full-in, a=−1 liquidate, a=0 half). ~25 s. |
 | `v9_batch.py` / `v12_batch.py` / `v16_batch.py` / `v18_batch.py` | helper | run `process_stock` on a curated subset |
 
 ## Running
@@ -82,6 +86,8 @@ v6 and v7 read `state[1 : 1+stock_dim]` thinking it was holdings (it's prices) a
 FinRL's parent `step()` does `actions = actions * self.hmax; actions = actions.astype(int)` (env_stocktrading.py:303). v6/v7's override rounded the raw `[-1, 1]` action to int *before* that scaling, collapsing every action into `{-2, -1, 0, 1, 2}` pre-scaling and `{-2*hmax, ..., 2*hmax}` post-scaling. Smoking gun: v6's policy std stuck at 0.97 forever, no gradient benefit to producing fine-grained actions.
 
 v8's `IntegerTradingEnv._process_action` scales to integer shares first (`action_shares = round(raw_action * hmax).astype(int)`), validates budget and position constraints in shares-space, then `step()` divides by `hmax` so `super().step()`'s internal `*hmax` recovers the exact integer share count.
+
+**Known residual wart (found 2026-06-11, present in v8–v24, NOT yet fixed):** the recovery is not always exact. FinRL truncates with `astype(int)`, and the float32 round-trip `n/hmax*hmax` lands just below `n` for ~4% of (hmax, n) pairs (e.g. hmax=23, n=7 executes 6; measured by census over hmax 2–200). Effect: occasional trades 1 share smaller than intended. No accounting corruption, but it violates the exact-recovery invariant. Fix when next re-baselining (changing it mid-experiment would contaminate v19-vs-v18 comparisons): nudge the rescaled action away from the truncation edge, `rescaled = (action_shares + 0.49 * np.sign(action_shares)) / hmax` — truncation toward zero then lands on the intended integer for both signs (verified: 0 mismatches over the same 40,397-pair census).
 
 ### Lookahead-leakage indicators
 
@@ -209,7 +215,7 @@ Explained variance finishes at 0.95–0.99 on every stock. The critic perfectly 
 - Validation split + early stopping (v16/v18). The two PPO-beats-B&H stocks (ITC, ADANIENT) came from this lever combined with the warmup gate.
 - Differential Sharpe ratio reward (v10). VL spiked to 85, clip_fraction collapsed. The DSR `(B - A²)^(3/2)` denominator detonates in low-vol windows.
 - Lighter regularization (v10/v11). EV did improve (0.99 → 0.80) but std grew, clip_fraction collapsed, returns regressed. Critic overfit isn't the dominant problem.
-- Deepening-only DD penalty `max(0, dd_t - dd_{t-1})` (v13/v14). λ=20 and λ=5 both underperformed v12 on RELIANCE. The signal is too sparse; v12's persistent penalty was doing useful work. v24 (in `variants.md`, design-only) revisits this with a "deepening-from-max" formulation.
+- Deepening-only DD penalty `max(0, dd_t - dd_{t-1})` (v13/v14). λ=20 and λ=5 both underperformed v12 on RELIANCE. The signal is too sparse; v12's persistent penalty was doing useful work. v25 (in `variants.md`, design-only) revisits this with a "deepening-from-max" formulation.
 - More compute (v15, 1M timesteps). Direct overfit evidence: std halved, EV pegged at 0.99, test return dropped 11pp.
 - min-val-trades filter (v17). No effect on HDFCBANK; the val@50k checkpoint had 29 val trades and the degeneracy was test-side.
 
@@ -225,13 +231,13 @@ Single-variable forks of v18. Hypothesis, target stock, and diagnostic for each 
 
 ### Designed (DESIGN ONLY in `variants.md`, not implemented)
 
-- v24, DD-from-max-seen penalty. Penalize only when the current drawdown reaches a new low-water mark. Smarter than v13/v14's deepening-from-prev-bar (which over-penalized normal volatility). Worth holding off until v19/v20 results clarify the reward landscape; combining DD-shape changes with reward-shape changes is the v10/v11 trap.
+- v25, DD-from-max-seen penalty. Penalize only when the current drawdown reaches a new low-water mark. Smarter than v13/v14's deepening-from-prev-bar (which over-penalized normal volatility). Worth holding off until v19/v20 results clarify the reward landscape; combining DD-shape changes with reward-shape changes is the v10/v11 trap.
 
 ### Untested, partial implementation
 
-- Indicator audit. `test_indicator_audit.py` is a static check against a hardcoded known-leakage list. A stronger version would compute each indicator on `train_raw` alone vs the full series and assert equality on the train slice.
+- ~~Indicator audit~~. DONE: `test_indicator_causality.py` computes each kept indicator on the train prefix alone vs the full series and asserts prefix equality. Passing as of 2026-06-11 (98 indicators, RELIANCE). `test_indicator_audit.py` remains as the fast static check.
 - Per-split indicator computation. Currently safe because all kept indicators are audited causal. The static test above is a defensive line; a true per-split recompute would be belt-and-suspenders.
-- Degeneracy diagnostic in `create_comprehensive_report`. Should warn if `total_trades < 0.01 * len(test_df)`. HDFCBANK v16 was caught only by reading `trades.csv` manually.
+- ~~Degeneracy diagnostic in `create_comprehensive_report`~~. DONE (v18–v24): warns in the report and on stdout when `total_trades < 0.01 * len(test_df)`. HDFCBANK v16 was caught only by reading `trades.csv` manually.
 
 ## Process notes
 

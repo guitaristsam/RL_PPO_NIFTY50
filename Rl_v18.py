@@ -41,7 +41,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from sb3_contrib import RecurrentPPO  # v9: LSTM policy for temporal memory
 from stable_baselines3.common.callbacks import BaseCallback
 import copy  # v16: deep-copy VecNormalize running stats during validation
-from torch.utils.tensorboard import SummaryWriter
 from gymnasium import spaces
 import gymnasium as gym
 from gymnasium import spaces
@@ -51,9 +50,11 @@ from finrl.meta.env_stock_trading.env_stocktrading import StockTradingEnv
 warnings.filterwarnings('ignore')
 
 # Configuration
-TRAINED_MODEL_DIR = "models"
-RESULTS_DIR = "results"
-CONSOLIDATED_REPORT = "consolidated_report.txt"
+# Overridable per experiment so variant runs don't collide with the v18
+# baseline outputs (resume guard would otherwise skip every stock).
+TRAINED_MODEL_DIR = os.environ.get("TRAINED_MODEL_DIR", "models")
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "results")
+CONSOLIDATED_REPORT = os.environ.get("CONSOLIDATED_REPORT", "consolidated_report.txt")
 # NIFTY50 OHLCV CSVs ship with the repo under ./data/ for full reproducibility.
 # Override with the NIFTY50_PATH env var if you keep your data elsewhere.
 NIFTY50_PATH = os.environ.get(
@@ -560,7 +561,7 @@ def create_trading_environment(df, tech_indicators, initial_amount=10000, hmax=N
         "num_stock_shares": [0] * stock_dim,
         "buy_cost_pct": [0.0025] * stock_dim,   # 0.25% transaction cost
         "sell_cost_pct": [0.0025] * stock_dim,  # 0.25% transaction cost
-        "reward_scaling": 1e-3,  # 1e-4 made critic rewards too tiny to learn from
+        "reward_scaling": 1e-3,  # UNUSED: IntegerTradingEnv.step() fully overrides the reward
         "state_space": 1 + 2*stock_dim + len(tech_indicators)*stock_dim,
         "action_space": stock_dim,
         "tech_indicator_list": tech_indicators,
@@ -641,6 +642,10 @@ class ValidationCallback(BaseCallback):
         if eligible and val_return > self.best_return:
             self.best_return = val_return
             self.model.save(self.save_path)
+            # Snapshot the live VecNormalize stats at checkpoint time so the
+            # restored model is tested with the SAME obs normalisation it was
+            # selected under (end-of-training stats differ from mid-training).
+            self.train_vn.save(self.save_path.replace('.zip', '_vecnorm.pkl'))
             if self.verbose:
                 print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
                       f"(trades={val_trades}) — NEW BEST (saved)")
@@ -738,8 +743,7 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
     # TensorBoard logging setup
     log_dir = f"runs/{stock_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     os.makedirs(log_dir, exist_ok=True)
-    writer = SummaryWriter(log_dir)
-    
+
     # v9: RecurrentPPO with MlpLstmPolicy. Daily price/indicator features are
     # highly autocorrelated; an MLP has no notion of "where in the trajectory"
     # we are, so it can't condition on regime. An LSTM gives the policy a hidden
@@ -819,8 +823,17 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
         if best_path is not None and os.path.exists(best_path):
             best_return = callbacks[0].best_return
             print(f"  Restoring best-val model (val_return={best_return:+.2f}%) from {best_path}")
-            # Re-load the saved model. We need to pass env=env_train so it
-            # binds to the same VecNormalize wrapper for downstream save.
+            # Restore the VecNormalize snapshot taken at checkpoint time, so
+            # downstream vecnorm.save() persists the stats that match this model.
+            best_vn_path = best_path.replace('.zip', '_vecnorm.pkl')
+            if os.path.exists(best_vn_path):
+                env_train = VecNormalize.load(best_vn_path, env_train.venv)
+                env_train.training = False
+                env_train.norm_reward = False
+                print(f"  Restored VecNormalize snapshot from {best_vn_path}")
+            else:
+                print("  WARNING: no VecNormalize snapshot next to best checkpoint; "
+                      "using end-of-training stats (pre-fix behaviour).")
             model_ppo = RecurrentPPO.load(best_path, env=env_train, device="auto")
         elif best_path is not None:
             print(f"  WARNING: no eligible val checkpoint was saved "
@@ -1020,16 +1033,21 @@ def calculate_yearly_returns(df_account_value):
         print("Warning: No date column found, using index")
         return {}
     
+    # Capture true start/end from the FULL series BEFORE dropping the NaN
+    # first row of pct_change — otherwise day-0 P&L is silently excluded.
+    start_value = float(df['account_value'].iloc[0])
+    end_value   = float(df['account_value'].iloc[-1])
+
     df['daily_return'] = df['account_value'].pct_change(1)
     df = df.dropna()
-    
-    if len(df) == 0:
+
+    if len(df) == 0 or start_value <= 0:
         print("Warning: No data available for return calculation")
         return {}
-    
+
     # Calculate various return metrics
-    total_days = len(df)
-    total_return = (df['account_value'].iloc[-1] / df['account_value'].iloc[0]) - 1
+    total_days = len(df)  # number of daily-return observations (N-1) — correct for annualisation
+    total_return = (end_value / start_value) - 1
     
     # Annualized return (assuming 252 trading days per year)
     if total_days > 0:
@@ -1053,8 +1071,8 @@ def calculate_yearly_returns(df_account_value):
         'sharpe_ratio': sharpe_ratio,
         'max_drawdown_pct': max_drawdown * 100,
         'trading_days': total_days,
-        'start_value': df['account_value'].iloc[0],
-        'end_value': df['account_value'].iloc[-1]
+        'start_value': start_value,
+        'end_value': end_value
     }
 
 def calculate_buy_and_hold(test_df, initial_amount=10000,
@@ -1163,9 +1181,45 @@ def create_comprehensive_report(df_account_value, trade_logger, test_df, stock_n
         f.write(f"Losing Trades: {trade_summary.get('losing_trades', 0)}\n")
         f.write(f"Win Rate: {trade_summary.get('win_rate_pct', 0):.2f}%\n")
         f.write(f"Total Closed Trades: {trade_summary.get('total_closed_trades', 0)}\n")
+
+        # Degeneracy diagnostic: near-zero trade count means a do-nothing
+        # policy whose "return" is just cash drift (HDFCBANK v16 false win).
+        total_trades = trade_summary.get('total_trades', 0)
+        if total_trades < 0.01 * len(test_df):
+            f.write(f"\n⚠️ DEGENERATE POLICY WARNING: only {total_trades} trades "
+                    f"over {len(test_df)} test rows — likely a do-nothing policy.\n")
+            print(f"  WARNING: degenerate policy for {stock_name} "
+                  f"({total_trades} trades / {len(test_df)} test rows)")
     
     print(f"  Report saved to: {report_path}")
     return ppo_metrics, buy_hold_metrics, trade_summary
+
+import re as _re
+
+def _parse_existing_report(report_path, stock_name):
+    """Reconstruct the consolidated-report dict from an existing per-stock
+    report, so resumed runs still include completed stocks."""
+    try:
+        text = open(report_path, encoding='utf-8').read()
+        finals = _re.findall(r"Final Portfolio Value: ₹([\d,.\-]+)", text)
+        if len(finals) < 2:
+            return None
+        def grab(pattern, cast=float, default=0):
+            m = _re.search(pattern, text)
+            return cast(m.group(1).replace(',', '')) if m else default
+        return {
+            'stock': stock_name,
+            'final_value': float(finals[0].replace(',', '')),      # PPO block comes first
+            'buy_hold_value': float(finals[1].replace(',', '')),   # B&H block second
+            'win_rate': grab(r"Win Rate: (-?[\d.]+)%"),
+            'transaction_costs': grab(r"Total Transaction Costs: ₹([\d,.\-]+)"),
+            'total_trades': grab(r"Total Trades: (\d+)", cast=int),
+            'closed_trades': grab(r"Total Closed Trades: (\d+)", cast=int),
+            'winning_trades': grab(r"Winning Trades: (\d+)", cast=int),
+        }
+    except Exception as e:
+        print(f"  Could not parse existing report for {stock_name}: {e}")
+        return None
 
 def process_stock(file_path):
     """
@@ -1185,7 +1239,7 @@ def process_stock(file_path):
     existing_report = os.path.join(stock_result_dir, f"{stock_name}_report.txt")
     if os.path.exists(existing_report):
         print(f"  Skipping {stock_name} — report already exists at {existing_report}")
-        return None
+        return _parse_existing_report(existing_report, stock_name)
 
     # Per-stock global seeding so each stock is independently reproducible.
     # v6/v7 only seeded PPO; numpy/random/torch were free-running.
@@ -1292,6 +1346,7 @@ def process_stock(file_path):
         
         # Save outputs
         df_account_value.to_csv(os.path.join(stock_result_dir, "account_value.csv"), index=False)
+        df_actions.to_csv(os.path.join(stock_result_dir, "actions.csv"), index=False)
         trade_logbook = trade_logger.get_trade_logbook()
         if not trade_logbook.empty:
             trade_logbook.to_csv(os.path.join(stock_result_dir, "trades.csv"), index=False)

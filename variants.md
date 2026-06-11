@@ -122,10 +122,13 @@ cut variance ~1/√3.
 - `Rl_v22.py` `train_ppo_model` signature: adds `seed_offset=0`. Effective
   seed = `42 + seed_offset`. Best-checkpoint path becomes
   `{stock}_seed{N}_best.zip`. Returns now include `effective_seed`.
-- `Rl_v22.py` `process_stock` signature: adds `seed_offset=0`. Resume guard,
-  RNG seeding, model save paths, vecnorm save paths, report filename, and
-  per-stock CSVs all suffixed `_seed{N}` when offset is non-zero (zero
-  offset preserves v18 filenames for back-compat).
+- `Rl_v22.py` `process_stock` signature: adds `seed_offset=0`. MODEL and
+  vecnorm save paths are ALWAYS suffixed `{stock}_seed{N}_ppo.zip` /
+  `_seed{N}_vecnorm.pkl` (N = 42 + offset, so even offset 0 gives
+  `_seed42_`); `ensemble_predict.py` depends on that suffix. Only the report
+  filename and per-stock CSVs drop the suffix at offset 0 (so a single
+  offset-0 run still writes `{stock}_report.txt` like v18). RNG seeding and
+  the resume guard also key off the effective seed.
 - `ensemble_predict.py` (~110 lines): loads N saved models for one stock,
   steps a shared eval env using the **average of the N continuous actions**
   per timestep. Each model sees obs from its own VecNormalize stats; the
@@ -181,9 +184,52 @@ python -c "from Rl_v23 import process_stock, NIFTY50_PATH; import os; \
 
 ---
 
-## DESIGN ONLY — proposed v24 (do NOT implement without confirming results from v19–v23)
+## Rl_v24.py — pooled cross-stock training
 
-**v24: smoother DD penalty (DD-deepening only).**
+**Hypothesis.** v18 trains one 128-hidden LSTM per stock on ~2,500 daily bars —
+data-starved for a 101-dim observation, which is why 43/50 stocks lose to B&H.
+Pooling all stocks into ONE policy gives ~50× the data, exposure to many
+regimes, and one model instead of 50.
+
+**Code change.** (single-variable vs v18: pooling only)
+- `build_pooled_data()`: runs v18's per-stock pipeline for every stock, takes
+  the INTERSECTION of indicator names so all envs share one observation shape,
+  precomputes per-stock hmax.
+- `PooledTradingEnv`: each `reset()` samples a random symbol + random
+  contiguous 252-date window from its train slice and delegates to a fresh
+  `IntegerTradingEnv` (the v18 env, reward and all). Dedicated `default_rng`.
+- `PooledValidationCallback`: each eval runs the deterministic policy over the
+  FULL val window of each of the 10 PANEL stocks; score = mean val return
+  across panel stocks with `trades >= min_val_trades`; requires >= 6/10
+  eligible, else the eval is degenerate-skipped.
+- `train_pooled` / `test_pooled`: ONE global VecNormalize, ONE RecurrentPPO at
+  `TOTAL_TIMESTEPS=2_000_000`; at test, the single model runs over every
+  stock's test slice. Vecnorm-snapshot logic retained.
+
+**How to run.**
+```bash
+python Rl_v24.py                       # full pooled run -> results_v24/
+
+# smoke test
+V24_STOCKS="RELIANCE,INFY,ITC" TOTAL_TIMESTEPS=20000 V24_WARMUP=0 \
+  V24_EVAL_FREQ=10000 V24_LOG_RESETS=1 python Rl_v24.py
+```
+
+**Diagnostic to look for.**
+- Per-panel val returns printed at each eval; if the pooled policy's mean panel
+  val return beats the per-stock v18 val returns, pooling is adding signal.
+- HDFCBANK is the key test: per-stock v18 found no winning policy; cross-stock
+  features are the hypothesised fix.
+
+**Status.** 3-stock / 20k-step smoke run passed end-to-end on 2026-06-11
+(pooling → panel evals → best-checkpoint + vecnorm snapshot → restore →
+per-stock test → consolidated report). Full 2M-step run not yet done.
+
+---
+
+## DESIGN ONLY — proposed v25 (do NOT implement without confirming results from v19–v23)
+
+**v25: smoother DD penalty (DD-deepening only).**
 
 v18/v12's penalty fires every step the equity is below peak by more than 10%.
 That double-penalises sustained drawdowns: once you're down 15%, every
@@ -216,4 +262,4 @@ about reward shaping. If v19's B&H-relative reward wins, the DD penalty's
 role changes (it's now subtracting from a smaller, alpha-style primary). If
 v20 wins, the val signal is already filtering high-DD policies and we may
 need less DD penalty, not different DD penalty. Run v19–v23, learn, THEN
-decide whether to layer v24 on top.
+decide whether to layer v25 on top.
