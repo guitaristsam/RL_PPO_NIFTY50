@@ -34,6 +34,7 @@ Single-file PPO trading system for NIFTY50 daily bars. The codebase has gone thr
 | `variants.md` | docs | One section per v19–v24. Hypothesis, code change summary, run command, diagnostic. Plus a DESIGN ONLY v25 proposal (DD-deepening-from-max). |
 | `summarize_results.py` | helper | After a run, parses every `results/{SYMBOL}/{SYMBOL}_report.txt` and prints a sorted outperformance table. |
 | `significance.py` | helper | Statistical significance of daily active returns (PPO − B&H) per stock: Newey-West t-test, circular block bootstrap (p + 95% CI), Probabilistic Sharpe Ratio, then Benjamini-Hochberg FDR across stocks. On the pre-fix 50-stock sweep: 1/49 nominal p<0.05 (~2.5 expected by chance), 0/49 survive FDR — no statistically demonstrable edge yet. Does NOT correct for the ~20 versions tried (would need Deflated Sharpe with the full trial record). |
+| `baselines.py` | helper | Dumb-strategy battery on the same test dates + cost model as PPO: SMA20/50 crossover and 126-day momentum, all-in/all-out, integer shares, 0.25%/side. Pre-fix sweep verdict: PPO beats SMA on 23/49 and MOM on 24/49 (coin flip), and PPO's mean outperformance (−59.6pp) is worse than the SMA rule's (−42.6pp). The LSTM is not yet earning its complexity. |
 | `test_indicator_audit.py` | test | Unittest. Fails if any of v8–v24's `list_of_indicators` includes a known-leakage name. v6/v7 are exempt. |
 | `test_indicator_causality.py` | test | Dynamic leakage audit: computes kept indicators on the train prefix alone vs the full series and asserts prefix equality (causal indicators can't change when future rows are appended). One stock (RELIANCE, `CAUSALITY_SYMBOL` to override). Run when bumping pandas-ta or editing the indicator list. |
 | `test_variant_envs.py` | test | Env-level math checks, no training: v19's B&H-relative reward recomputed from env internals at every step; v21's target-exposure mapping (a=+1 full-in, a=−1 liquidate, a=0 half). ~25 s. |
@@ -71,6 +72,7 @@ python summarize_results.py                          # sorted table for results/
 python summarize_results.py results_v18              # ...or any results dir
 python summarize_results.py results_v18 results_v19  # per-stock outperformance deltas
 python significance.py results_v18                   # p-values, CIs, PSR, FDR across stocks
+python baselines.py results_v18                      # PPO vs SMA-crossover / momentum on same windows
 ```
 
 Tests (no test runner config; each file runs directly):

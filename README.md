@@ -38,6 +38,12 @@ Probabilistic Sharpe Ratio) and applies Benjamini-Hochberg FDR across the
 universe. On the current sweep **no stock survives FDR** — the stock-level wins
 above are candidates for forward testing, not demonstrated edge.
 
+`python baselines.py` runs the other honesty check: SMA20/50 crossover and
+126-day momentum on the identical test windows and cost model. On the current
+sweep PPO beats those two-line rules on only ~half the stocks — the model has
+not yet earned its complexity, which is exactly what the variant queue
+(`variants.md`) is trying to change.
+
 ## Bugs that mattered
 
 The first version produced +1946% returns and Sharpe 6.58 on ADANIPORTS. None of it was real. Each fix was isolated to one variable.
@@ -84,6 +90,7 @@ python run_panel.py v18
 python summarize_results.py                      # post-run aggregation
 python summarize_results.py results_v18 results_v19   # baseline-vs-variant deltas
 python significance.py results_v18               # p-values, bootstrap CIs, PSR, FDR
+python baselines.py results_v18                  # PPO vs SMA/momentum, same windows + costs
 python test_indicator_audit.py                   # static leakage check (fast)
 python test_indicator_causality.py               # dynamic leakage audit (~1 min)
 python test_variant_envs.py                      # env-level reward/action math checks
@@ -103,6 +110,7 @@ v9_batch.py … v18_batch.py   curated stock subsets
 ensemble_predict.py       averages N v22 seeds at test time
 summarize_results.py      portfolio-level aggregation + baseline-vs-variant compare
 significance.py           active-return significance: NW t-test, bootstrap, PSR, FDR
+baselines.py              SMA-crossover + momentum battery on identical test windows
 test_indicator_audit.py   static leakage check (known-bad indicator names)
 test_indicator_causality.py  dynamic leakage audit (train-prefix recompute)
 test_variant_envs.py      v19 reward / v21 action math vs env internals
