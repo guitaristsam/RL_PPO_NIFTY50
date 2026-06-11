@@ -4,6 +4,11 @@ PPO + LSTM trading agent on NIFTY50 daily bars. One model per stock, 70/15/15 ch
 
 ## Results across the 50-stock universe
 
+> **Note:** the numbers below predate a measurement fix (best-val checkpoints
+> were being tested under end-of-training `VecNormalize` stats rather than the
+> stats they were selected with — see the bug table). A post-fix re-baseline
+> is in progress; expect these to shift somewhat.
+
 | | |
 |---|---|
 | Beats Buy & Hold | 7 / 50 |
@@ -36,6 +41,7 @@ The first version produced +1946% returns and Sharpe 6.58 on ADANIPORTS. None of
 | State-layout swap | Budget clamp was a no-op; trade log reported "1646 shares" | The `IntegerTradingEnv` override read `state[1]` thinking it was holdings. In FinRL's layout `state[1]` is price; holdings are at `state[1+stock_dim]`. |
 | Action scaling | Policy std stuck at 0.97; agent could only output {-2,-1,0,1,2} after rounding | Override rounded the [-1,1] action to int *before* `super().step()` multiplied by `hmax`. |
 | bfill across split | Future indicator values bled into past bars | `fillna(method='bfill')` ran on the union frame after the chronological split. |
+| Checkpoint/normalisation mismatch | Best-val model tested under stats it was never selected with | The val callback saved the model but not the live `VecNormalize` running stats; after restore, the test ran with end-of-training stats. Fixed by snapshotting stats alongside each checkpoint. |
 
 After v8 the numbers became honest. v9 swapped to RecurrentPPO with a log-return reward (RELIANCE went from -40% to +68% on this change alone). v12 added a drawdown penalty (+21pp average across 8 stocks). v16 introduced the validation callback (first PPO-beats-B&H result on ITC). v18 added a 100k-step warmup before the first val eval, which fixed the "lucky early checkpoint" failure mode and produced the second B&H-beating stock (ADANIENT).
 
@@ -65,8 +71,14 @@ python Rl_v18.py
 python -c "from Rl_v18 import process_stock, NIFTY50_PATH; import os; \
   process_stock(os.path.join(NIFTY50_PATH, 'RELIANCE_daily.csv'))"
 
-python summarize_results.py        # post-run aggregation
-python test_indicator_audit.py     # static leakage check
+# fixed 10-stock comparison panel for a variant (outputs to results_<ver>/)
+python run_panel.py v18
+
+python summarize_results.py                      # post-run aggregation
+python summarize_results.py results_v18 results_v19   # baseline-vs-variant deltas
+python test_indicator_audit.py                   # static leakage check (fast)
+python test_indicator_causality.py               # dynamic leakage audit (~1 min)
+python test_variant_envs.py                      # env-level reward/action math checks
 ```
 
 To use your own data instead of the bundled CSVs, set `NIFTY50_PATH` to a directory of `{SYMBOL}_daily.csv` files with columns `datetime, open, high, low, close, volume`.
@@ -76,15 +88,19 @@ To use your own data instead of the bundled CSVs, set `NIFTY50_PATH` to a direct
 ```
 Rl_v18.py                 current baseline
 Rl_v6.py … Rl_v17.py      version history (frozen)
-Rl_v19.py … Rl_v23.py     unrun forks of v18 — see variants.md
+Rl_v19.py … Rl_v23.py     unrun single-variable forks of v18 — see variants.md
+Rl_v24.py                 pooled cross-stock training (one policy, all stocks)
+run_panel.py              runs a variant over a fixed 10-stock panel
 v9_batch.py … v18_batch.py   curated stock subsets
 ensemble_predict.py       averages N v22 seeds at test time
-summarize_results.py      portfolio-level aggregation
-test_indicator_audit.py   regression test for leakage names
+summarize_results.py      portfolio-level aggregation + baseline-vs-variant compare
+test_indicator_audit.py   static leakage check (known-bad indicator names)
+test_indicator_causality.py  dynamic leakage audit (train-prefix recompute)
+test_variant_envs.py      v19 reward / v21 action math vs env internals
 data/                     50 NIFTY50 daily OHLCV CSVs
 results/                  reports + trade logs from the latest sweep
 CLAUDE.md                 version diary, bug history, hyperparameters
-variants.md               v19–v23 hypotheses, run commands, diagnostics
+variants.md               v19–v24 hypotheses, run commands, diagnostics
 ```
 
 ## Limitations
