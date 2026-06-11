@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 Working notes on the RL_PPO_NIFTY50 codebase. Useful when picking up the project after a break or when bringing a new tool/agent up to speed.
 
 ## Project state
@@ -48,11 +50,38 @@ python v18_batch.py
 # one-stock ad-hoc
 python -c "from Rl_v18 import process_stock, NIFTY50_PATH; import os; \
   process_stock(os.path.join(NIFTY50_PATH, 'RELIANCE_daily.csv'))"
+
+# fixed 10-stock comparison panel for any variant; outputs go to
+# results_<ver>/ models_<ver>/ so runs never collide with the baseline
+python run_panel.py v18
+python run_panel.py v22 --seeds 3      # v22 only: trains seed offsets 0..2
+
+# v24 (pooled) runs standalone — run_panel refuses it by design
+python Rl_v24.py
+# v24 smoke test (~5 min): 3 stocks, 20k steps
+V24_STOCKS="RELIANCE,INFY,ITC" TOTAL_TIMESTEPS=20000 V24_WARMUP=0 \
+  V24_EVAL_FREQ=10000 python Rl_v24.py
+```
+
+Aggregation and comparison:
+
+```bash
+python summarize_results.py                          # sorted table for results/
+python summarize_results.py results_v18              # ...or any results dir
+python summarize_results.py results_v18 results_v19  # per-stock outperformance deltas
+```
+
+Tests (no test runner config; each file runs directly):
+
+```bash
+python test_indicator_audit.py       # static leakage check, ~1 min (imports all versions)
+python test_indicator_causality.py   # dynamic leakage audit, ~30 s, one stock
+python test_variant_envs.py          # v19 reward / v21 action math vs env internals, ~25 s
 ```
 
 `requirements.txt` has the pinned versions. `sb3-contrib` is what supplies `RecurrentPPO`.
 
-Each `process_stock` call has a resume guard: if `results/{SYMBOL}/{SYMBOL}_report.txt` already exists, the stock is skipped. Delete that file to force a re-run.
+Each `process_stock` call has a resume guard: if `results/{SYMBOL}/{SYMBOL}_report.txt` already exists, the stock is skipped (the run still parses the existing report so consolidation includes it). Delete that file to force a re-run.
 
 ## Pipeline (per stock, in `process_stock`)
 
