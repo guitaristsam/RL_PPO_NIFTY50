@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR HDFCBANK
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,230.86
+Total Return: 32.31%
+Annualized Return: 6.59%
+Volatility (Annualized): 18.98%
+Sharpe Ratio: 0.347
+Maximum Drawdown: -20.25%
+Trading Days: 1106
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,061.78
+Total Return: 30.62%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 32.31%
+Buy & Hold Return: 30.62%
+Outperformance: 1.69%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 83
+Buy Trades: 42
+Sell Trades: 41
+Total Transaction Costs: ₹1,975.64
+Average Cost per Trade: ₹23.80
+
+🎯 TRADING ACCURACY:
+Winning Trades: 36
+Losing Trades: 5
+Win Rate: 87.80%
+Total Closed Trades: 41

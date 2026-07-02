@@ -22,8 +22,8 @@ Single-file PPO trading system for NIFTY50 daily bars. The codebase has gone thr
 | `Rl_v15.py` | frozen | v12 + 1M timesteps (5×). Failed: RELIANCE +74% vs v12 +85%. Direct overfit (std halved, EV pegged at 0.99, test return dropped). |
 | `Rl_v16.py` | frozen | v12 + 70/15/15 split + custom `ValidationCallback` (eval_freq=50k). First PPO-beats-B&H result (ITC +40pp, Sharpe 1.36). Failure modes: HDFCBANK degenerate at val@50k; INFY late-training overfit at val@200k. |
 | `Rl_v17.py` | frozen | v16 + min_val_trades=5 on val checkpoints. No effect on HDFCBANK. The val@50k checkpoint had 29 val trades; degeneracy was test-side. |
-| `Rl_v18.py` | **current** | v17 + warmup_steps=100k. Skips the first val eval to avoid lucky early checkpoints. Second PPO-beats-B&H stock (ADANIENT +66.8pp, Sharpe 0.64). |
-| `Rl_v19.py` | unrun queue | v18 + B&H-relative reward (`reward -= log(close_t/close_{t-1})`). Hypothesis: explicit alpha gradient. |
+| `Rl_v18.py` | **current** | v17 + warmup_steps=100k. Skips the first val eval to avoid lucky early checkpoints. Post-vecnorm-fix 10-stock panel (`results_v18/`, 2026-06): 1/10 beats B&H (HDFCBANK +1.69pp), avg outperf −63.2pp. The pre-fix wins (ITC +40pp, ADANIENT +66.8pp) were vecnorm-measurement artifacts. |
+| `Rl_v19.py` | frozen | v18 + B&H-relative reward (`reward -= log(close_t/close_{t-1})`). REJECTED: 10-stock panel improved 2/10 vs v18, avg delta −18.4pp, 0/10 beat B&H. clip_fraction healthy (mean 0.099) — gradients fine, hypothesis wrong. |
 | `Rl_v20.py` | unrun queue | v18 + best-by-Sharpe in `ValidationCallback`. Targets high-variance lucky-long val winners (INFY-style). |
 | `Rl_v21.py` | unrun queue | v18 + target-exposure action. Action `(a+1)/2 ∈ [0,1]` is target capital fraction; env computes share-delta. |
 | `Rl_v22.py` | unrun queue | v18 + `seed_offset` parameter. Each seed saves to `{stock}_seed{N}_*`. Companion `ensemble_predict.py` averages N continuous actions per step. |
@@ -180,7 +180,30 @@ FinRL's `step()` advances `self.day` and updates state to the new day's price af
 
 ## Empirical baselines (200k timesteps)
 
-### v18 small batch (5 stocks; ITC is the control)
+### v18 10-stock panel, post-vecnorm-fix (2026-06, `results_v18/`) — CURRENT comparison baseline
+
+The vecnorm-snapshot fix changed measurement for every variant; all tables below this one are pre-fix and stale for comparisons (kept for history).
+
+| Stock | PPO | B&H | Outperf | Sharpe | DD | Trades |
+|---|---|---|---|---|---|---|
+| HDFCBANK | +32.31% | +30.62% | +1.69pp | +0.35 | -20.3% | 83 |
+| ADANIENT | -22.28% | -21.61% | -0.67pp | -0.18 | -62.4% | 46 |
+| TCS | -8.04% | +4.96% | -13.00pp | -0.22 | -20.1% | 56 |
+| RELIANCE | +27.23% | +68.70% | -41.47pp | +0.44 | -19.8% | 51 |
+| INFY | -21.55% | +22.50% | -44.05pp | -0.72 | -26.4% | 103 |
+| AXISBANK | +3.88% | +51.62% | -47.74pp | +0.12 | -23.3% | 99 |
+| SBIN | +25.65% | +88.72% | -63.07pp | +0.32 | -26.6% | 99 |
+| ITC | +30.40% | +105.88% | -75.48pp | +0.41 | -18.0% | 104 |
+| HINDALCO | +25.14% | +178.12% | -152.98pp | +0.25 | -31.7% | 111 |
+| TATAMOTORS | +55.70% | +250.97% | -195.27pp | +0.43 | -32.1% | 75 |
+
+1/10 beats B&H, avg outperf −63.2pp, avg Sharpe +0.12. Significance: 0/10 nominal p_boot<0.05, 0/10 survive FDR. Dumb baselines on the same windows: PPO beats SMA20/50 on 4/10 and MOM126 on 4/10; MOM126's mean outperf (−32.6pp) is far better than PPO's (−63.2pp). Val curves: 6/8 logged stocks peak at val@100k then decay (overfit signature). The headline pre-fix wins (ITC +40pp, ADANIENT +66.8pp) do not survive the measurement fix.
+
+### v19 panel verdict (2026-06, `results_v19/`) — REJECTED
+
+B&H-relative reward vs the v18 panel above: improved 2/10 (AXISBANK +10.9pp, RELIANCE +1.6pp), avg delta −18.4pp, 0/10 beat B&H, PPO mean outperf −81.6pp. On the target trend stocks the hypothesis failed: TATAMOTORS −49.0pp, INFY −1.4pp. clip_fraction mean 0.099 (no v10-style collapse), so the relative reward produced healthy gradients — it just generalized worse.
+
+### v18 small batch (5 stocks; ITC is the control) — pre-vecnorm-fix, stale
 
 | Stock | v18 PPO | v18 B&H | v18 Outperf | v16 Outperf | Δ vs v16 | v18 Sharpe | v18 DD | Trades |
 |---|---|---|---|---|---|---|---|---|
@@ -224,7 +247,7 @@ Validation curves observed across batches:
 
 ### Known failure modes
 
-- HDFCBANK looks feature-untrainable. v16 saved a "do nothing" policy at val@50k that produced 11 test trades and 0% return. It looked OK because the test period drifted up modestly while the policy held cash. v17 (min-val-trades) didn't change anything because val@50k had 29 val trades. v18 (warmup=100k) forced val@100k to be saved instead, producing a real but actively-losing policy (-24.58% test, 90 trades). The interpretation: there is no winning policy on HDFCBANK with the current feature set + reward; v16 was a false win. A real fix is feature-side (cross-asset signals, fundamentals) or reward-side (B&H-relative reward, see v19).
+- HDFCBANK looks feature-untrainable. v16 saved a "do nothing" policy at val@50k that produced 11 test trades and 0% return. It looked OK because the test period drifted up modestly while the policy held cash. v17 (min-val-trades) didn't change anything because val@50k had 29 val trades. v18 (warmup=100k) forced val@100k to be saved instead, producing a real but actively-losing policy (-24.58% test, 90 trades). The interpretation: there is no winning policy on HDFCBANK with the current feature set + reward; v16 was a false win. A real fix is feature-side (cross-asset signals, fundamentals); the reward-side attempt (v19 B&H-relative reward) was tested and rejected.
 - Late-training overfit (INFY in the v16 batch): val@200k looked best but didn't generalize. Untouched by v17/v18. Would need a held-out "early test" slice or a different val signal (e.g. val Sharpe instead of val return, see v20).
 
 ## Training-curve diagnostics (batch run of 7 stocks at 391 iterations each)
@@ -252,17 +275,17 @@ Explained variance finishes at 0.95–0.99 on every stock. The critic perfectly 
 - Deepening-only DD penalty `max(0, dd_t - dd_{t-1})` (v13/v14). λ=20 and λ=5 both underperformed v12 on RELIANCE. The signal is too sparse; v12's persistent penalty was doing useful work. v25 (in `variants.md`, design-only) revisits this with a "deepening-from-max" formulation.
 - More compute (v15, 1M timesteps). Direct overfit evidence: std halved, EV pegged at 0.99, test return dropped 11pp.
 - min-val-trades filter (v17). No effect on HDFCBANK; the val@50k checkpoint had 29 val trades and the degeneracy was test-side.
+- B&H-relative reward (v19). REJECTED on the post-fix panel: improved 2/10, avg delta −18.4pp vs v18, 0/10 beat B&H. Gradients stayed healthy (clip_fraction 0.099); the alpha-relative signal just generalized worse, including on the target trend stocks (TATAMOTORS −49pp).
 
-### Designed (in `Rl_v19.py`–`Rl_v23.py`, syntax-clean, not yet run)
+### Designed (in `Rl_v20.py`–`Rl_v23.py`, `Rl_v26.py`, syntax-clean, not yet run)
 
 Single-variable forks of v18. Hypothesis, target stock, and diagnostic for each are in `variants.md`. Suggested run order:
 
-1. v19, B&H-relative reward. `reward = (log(eq_t/eq_{t-1}) - log(close_t/close_{t-1})) * 100`, clipped, minus DD. Highest a-priori leverage on the v18 problem of making absolute money but losing to bull-trending B&H.
+1. v26, feature reduction (98 → 22 indicators, observation 101 → 25 dims). Cheapest untested anti-overfit lever, and the post-fix v18 val curves (6/8 peak at 100k then decay) point straight at overfitting — if EV stops pegging at 0.99 and val curves stop decaying past 100k, layer it under every later variant.
 2. v22, ensemble seeds. 3-seed ensemble cuts variance roughly 1/√3. Cheap and stackable.
 3. v20, best-by-Sharpe in `ValidationCallback`. Targets INFY-style high-variance overfit by filtering val winners on risk-adjusted return.
 4. v21, target-exposure action. Action ∈ [0, 1] = target capital fraction. Decouples credit assignment from price level.
 5. v23, warmup=150k, eval_freq=25k. Forces all eligible evals into the 150k–200k range. Speculative; only worth running if v17/v18's warmup ideas need refinement.
-6. v26, feature reduction (98 → 22 indicators, observation 101 → 25 dims). Cheapest untested anti-overfit lever; run early — if EV stops pegging at 0.99 and val curves stop decaying past 100k, it should be layered under every later variant.
 
 ### Designed (DESIGN ONLY in `variants.md`, not implemented)
 

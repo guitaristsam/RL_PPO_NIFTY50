@@ -41,6 +41,14 @@ python -c "from Rl_v19 import process_stock, NIFTY50_PATH; import os; \
 - Compare on RELIANCE / INFY / TATAMOTORS — those are the canonical
   high-trend stocks where v18 underperformed B&H.
 
+**Status (2026-07-02).** REJECTED. 10-stock panel (`results_v19/`) vs the
+post-vecnorm-fix v18 baseline: improved 2/10 (AXISBANK +10.9pp, RELIANCE
++1.6pp), avg delta −18.4pp, 0/10 beat B&H, 0/10 significant. On the target
+trend stocks: TATAMOTORS −49.0pp, INFY −1.4pp. Diagnostic verdict:
+clip_fraction mean 0.099 (no v10-style collapse), so the relative reward
+produced healthy gradients — the hypothesis itself failed, not the
+optimization.
+
 ---
 
 ## Rl_v20.py — best-by-Sharpe in ValidationCallback
