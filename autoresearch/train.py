@@ -76,7 +76,7 @@ PPO_PARAMS = {
     "max_grad_norm": 0.5,
     "verbose": 0,
     "seed": SEED,
-    "device": "auto",
+    "device": "cpu",  # pinned: cloud runners are CPU; keeps the determinism story honest
     "tensorboard_log": None,
     "policy_kwargs": {
         "lstm_hidden_size": 128,
@@ -90,6 +90,15 @@ PPO_PARAMS = {
 # =====================================================================
 # END AGENT-EDITABLE BLOCK — everything below is fixed harness machinery
 # =====================================================================
+
+# Leakage guardrail (enforced, not advisory): INDICATORS may only be a REORDER or
+# SUBSET of the leak-audited v18 universe. Adding an unaudited name could leak the
+# future and silently inflate the metric — the most dangerous failure mode. This
+# assert crashes the run instead of letting a leaky "win" reach the leaderboard.
+assert set(INDICATORS) <= set(AUDITED_INDICATORS), (
+    "INDICATORS must be a subset/reorder of the audited v18 list — no unaudited "
+    "names. Offending: " + ", ".join(sorted(set(INDICATORS) - set(AUDITED_INDICATORS)))
+)
 
 INITIAL_AMOUNT = 10000
 _TA_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ta_cache")
@@ -133,13 +142,23 @@ def _prepare_splits(stock):
     filter -> NaN handling -> 70/15/15 chronological split -> RobustScaler fit on
     train only. Only tech indicators are scaled; close stays raw (so B&H and hmax
     below are on real prices, matching production)."""
-    df = _all_indicators_frame(stock).copy()
-
+    df_all = _all_indicators_frame(stock).copy()
     basic_cols = ["symbol", "open", "high", "low", "close", "volume"]
-    existing = [c for c in INDICATORS if c in df.columns]
-    df = df[basic_cols + existing]
 
-    df, _ = handle_nan_per_stock(df)
+    # Pin the NaN-trim start row (and therefore the split dates below) to the FULL
+    # audited indicator universe, NOT this experiment's INDICATORS subset.
+    # handle_nan_per_stock trims to the first row where ALL kept indicators are
+    # non-null; if that depended on the subset, pruning a slow-warmup indicator
+    # would move the trim point, shift the 70/15/15 split, and put the validation
+    # window on a different market period — making mean_val_outperf_pp incomparable
+    # across runs. Anchoring on the audited list keeps the window invariant.
+    audited = [c for c in AUDITED_INDICATORS if c in df_all.columns]
+    df_fixed, _ = handle_nan_per_stock(df_all[basic_cols + audited])
+
+    # Now restrict to the experiment's indicators (a subset of the audited list, per
+    # the assert at import time). Rows/dates are already fixed by the trim above.
+    exp_inds = [c for c in INDICATORS if c in df_fixed.columns]
+    df = df_fixed[basic_cols + exp_inds]
     processed_raw, _, _ = prepare_data_for_finrl(df, skip_scaling=True)
 
     dates = sorted(processed_raw["date"].unique())

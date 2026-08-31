@@ -19,25 +19,41 @@ re-read it at the start of every session. The pattern is adapted from
    line: `METRIC mean_val_outperf_pp=<x> mean_test_outperf_pp=<y>`.
 4. Decide keep or discard:
    - **Keep** only if `mean_val_outperf_pp` beats the current leaderboard best by
-     a **margin of at least +3.0 pp** (noise gate — a smaller gain is likely
-     seed/slice noise, not signal). On keep: `git add -A && git commit` with the
-     metric in the message, and prepend a row to `log.md`.
+     the **calibrated noise gate** (see "Calibrate the gate" below; default +3.0 pp
+     until measured). A smaller gain is seed/slice noise, not signal. On keep:
+     `git add -A && git commit` with the metric in the message, and prepend a row to
+     `log.md`. Require the win on **two seeds** (rerun the kept config at a second
+     SEED) before promoting anything to CANDIDATES — a one-seed win can be a lucky
+     draw and would waste a full-panel night.
    - **Discard** otherwise: `git checkout -- autoresearch/train.py` to revert, and
      still append a one-line row to `log.md` (negative results are data — they
      stop you and others re-trying the same thing).
 5. Repeat until the session ends. Each experiment is one commit, so `git log` is
    the full experiment history.
 
+## Calibrate the gate (do this ONCE, before trusting any win)
+
+If `log.md` has no measured noise floor yet, your **first task** is to measure it —
+not to run an experiment. The metric has a seed-noise floor and the +3pp default is
+a guess. With `train.py` unmodified, run the baseline at three seeds (`SEED = 42`,
+then `43`, then `44` — `SEED` is in the agent-editable block) and record the three
+`mean_val_outperf_pp` values in `log.md`. Set the working gate to
+`max(3.0 pp, 2 × stdev(those three))` and write that gate value at the top of
+`log.md`. Every later keep/discard uses that calibrated gate. Re-measure if you
+change `BUDGET_TIMESTEPS` or `STOCKS` (both move the floor).
+
 ## Hard rules (do not violate)
 
 - **Never edit `Rl_v18.py` or any frozen file** (`Rl_v6..v24`, `v26`, the helper
   scripts). Only `train.py`, `log.md`, and new files under `autoresearch/`.
-- **Indicators: remove or reorder only, never add.** Every name in the audited
-  `INDICATORS` list has passed `test_indicator_causality.py`. Adding an unaudited
-  name can leak future information and silently inflate the metric — the most
-  dangerous failure mode, because it looks like a huge win. If you change
-  `INDICATORS`, run `python test_indicator_causality.py` from the repo root as a
-  gate before trusting the result; if it fails, revert immediately.
+- **Indicators: remove or reorder only, never add.** Adding an unaudited name can
+  leak future information and silently inflate the metric — the most dangerous
+  failure mode, because it looks like a huge win. This is **enforced in code**:
+  `train.py` asserts at import that `INDICATORS` is a subset/reorder of the audited
+  v18 universe, so an unaudited name crashes the run rather than producing a leaky
+  result. Do not try to defeat that assert. (Note: `test_indicator_causality.py`
+  audits the frozen v18 `list_of_indicators`, NOT `train.py`'s `INDICATORS`, so it
+  is NOT the gate here — the import-time assert is.)
 - **Never select on the test number.** `mean_test_outperf_pp` is REPORT-ONLY. Use
   it only as a red flag: if val improves a lot but test does not (or moves the
   other way), the change is overfitting the proxy — discard it and note why.
@@ -49,7 +65,11 @@ re-read it at the start of every session. The pattern is adapted from
 The proxy trains at a reduced budget on a 3-stock panel and evaluates the
 *final* checkpoint. Production (`run_panel.py`) trains 200k steps on 10 stocks and
 early-stops on the best validation checkpoint. So this is a **cheap directional
-screen, not a verdict.** A proxy win is a *candidate*, not a confirmed
+screen, not a verdict.** **Known bias:** because it scores the FINAL 60k checkpoint,
+it penalizes slow-learning changes — smaller nets and higher `ent_coef`, which are
+exactly the anti-overfit levers you most want to test. So do NOT discard a change
+whose metric is *trending up but hasn't peaked* by the budget; note it and, if
+promising, re-test at a larger `BUDGET_TIMESTEPS` before rejecting. A proxy win is a *candidate*, not a confirmed
 improvement. When a change clears the margin gate AND holds up on the test column:
 append it to `autoresearch/CANDIDATES.md` (create if absent) with the metric and
 the one-line change description. The nightly panel-run routines read that file and

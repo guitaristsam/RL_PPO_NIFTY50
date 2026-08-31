@@ -60,6 +60,32 @@ This system is meant to run forever with zero human interference. Obey these:
      push it with your other progress. Required, not optional.
    - auto-tinker's NEEDS_HUMAN/FRONTIER consolidation does NOT touch any HANDOFF
      file — handoffs are excluded from all cross-branch reconciliation.
+7. **STOP kill-switch (check FIRST, every session).** Before doing anything, check
+   for a stop flag: `git fetch origin auto/tinker && git show origin/auto/tinker:autoresearch/STOP 2>/dev/null`.
+   If that file exists, **exit immediately** without running. This is how the human
+   pauses the whole swarm without deleting the cron routines (they just create/delete
+   `autoresearch/STOP` on `auto/tinker`).
+8. **Overlap lease (avoid two sessions on one branch).** Both nightly waves (2:30
+   and 4:30 IST) can fire while a prior session on your branch is still running.
+   Guard against it: at session start, `git fetch origin <your-branch>` and read
+   `autoresearch/.lease-<routine>` from it; if that lease timestamp is **less than
+   2.5 hours old**, another session of yours is likely still active — exit
+   immediately. Otherwise write `autoresearch/.lease-<routine>` with the current UTC
+   time, commit+push it, and proceed; refresh it as you work. A stale lease (>2.5h)
+   is treated as dead and overridden. (A concurrent push that gets rejected
+   non-fast-forward is also a signal another session is live — if so, exit and let
+   it continue rather than fighting the branch.)
+9. **Keep branches lean (unattended for weeks).** `models_*/` and `.ta_cache/` are
+   already gitignored. Also avoid committing bulky per-stock CSVs
+   (`account_value.csv`, `trades.csv`, `actions.csv`) if the branch is growing large
+   — the coordination surfaces only need the `*_report.txt` and `READOUT.md`. If a
+   push is rejected for size, gitignore the bulky artifacts on your branch and keep
+   only reports + READMEs.
+
+**Staleness note (S2):** a champion that auto-tinker sets *tonight* is reconciled
+into FRONTIER during tinker's session; the run/research routines that read FRONTIER
+at the start of the *same* night see the previous state (one-cycle lag). This is
+expected — they pick it up next fire. Do not treat a one-night lag as a bug.
 
 **auto-tinker also consolidates NEEDS_HUMAN.md**: at session start, in addition to
 reconciling the CHAMPION rows, scan the other branches' `NEEDS_HUMAN.md` for open
@@ -99,6 +125,10 @@ Any routine may add/reorder. Pick the top item you are equipped to run. When you
 finish one, strike it through and record the outcome (win → update a CHAMPION
 section; loss → note it so nobody retries it).
 
+0. (tinker, FIRST NIGHT ONLY) Calibrate the metric noise floor before trusting any
+   win: run the unmodified baseline at SEED 42/43/44, record in log.md, set the gate
+   to max(3pp, 2σ). See program.md "Calibrate the gate". Until this is done, treat
+   all proxy "wins" as unconfirmed.
 1. (run) Validate the next unrun queued variant on the full panel: v26, v22, v20,
    v21, v23 — but if a proxy CANDIDATE outranks these, validate that first.
 2. (tinker) Screen single-variable anti-overfit changes on the proxy; promote any
