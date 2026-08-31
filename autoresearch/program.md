@@ -82,6 +82,13 @@ reward.
   FRONTIER.md and push, so the run/research routines know what leads.
 - When you flag a CANDIDATES.md winner, also add it to FRONTIER.md's
   "CANDIDATES pending" list so a run routine validates it before its fixed queue.
+- **You are the sole writer of FRONTIER.md** (avoids multi-routine conflicts). At
+  session start, reconcile the full-panel CHAMPION section: `git fetch --all`, scan
+  the other routines' latest readouts for a new champion —
+  `git show origin/auto/run-a:results_*/READOUT.md` and same for `origin/auto/run-b`
+  (look for a "NEW CHAMPION" line naming a variant that beats the current panel
+  row) — and if one beats the current champion, update the CHAMPION panel row and
+  push. This is how a win discovered by a run routine propagates to everyone.
 
 ## Advisor (session boundaries only)
 
