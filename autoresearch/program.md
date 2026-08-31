@@ -72,6 +72,17 @@ materially different mechanism — see CLAUDE.md): DSR reward, added regularizat
 deepening-only drawdown penalty, 1M timesteps, min-val-trades filter, B&H-relative
 reward.
 
+## Frontier (chase the current best, don't re-fork from a stale baseline)
+
+`autoresearch/FRONTIER.md` is the shared board all four nightly routines read.
+- At **session start**, read it. Your baseline is the current proxy CHAMPION, not
+  necessarily v18 — if a previous session's kept change is the head of `log.md`,
+  `train.py` already reflects it; keep building single-variable changes *from that*.
+- When you set a new proxy best, update the "CHAMPION — fast proxy" row in
+  FRONTIER.md and push, so the run/research routines know what leads.
+- When you flag a CANDIDATES.md winner, also add it to FRONTIER.md's
+  "CANDIDATES pending" list so a run routine validates it before its fixed queue.
+
 ## Advisor (session boundaries only)
 
 The local `advisor` tool is not available in this environment. Per the global
