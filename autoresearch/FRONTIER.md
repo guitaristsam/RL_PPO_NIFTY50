@@ -37,21 +37,29 @@ This system is meant to run forever with zero human interference. Obey these:
    generating value: tinker invents new single-variable changes, research proposes
    new forks from the champion, run routines validate them and expand the panel.
    There is always a next best action — take it.
-6. **Handoff checkpoint (resume cold every fire).** Each cloud fire is a fresh
-   session with no memory of the last one. So maintain a per-branch handoff doc
-   `autoresearch/HANDOFF.md` on YOUR branch (see the template
-   `autoresearch/HANDOFF.template.md`):
-   - **At session start, read your branch's `HANDOFF.md` FIRST** (before picking an
-     action) to recover what the previous session was mid-way through — which
-     variant/experiment, which stock, what was about to happen next, any gotcha.
-     Combined with the git resume guards, this lets you continue seamlessly instead
-     of restarting or repeating.
-   - **Update it as you go and again right before the session ends** (do it
-     early/often — a session can be cut off without warning): current task, exact
-     progress (e.g. "v26 panel: 6/10 done, HDFCBANK next"), the immediate next
-     step, and anything the next session must not re-do or must watch out for.
-     Commit + push it with your other progress. This IS the session-level
-     checkpoint; treat it as required, not optional.
+6. **Handoff checkpoint (resume cold every fire) — YOUR OWN FILE ONLY.** Each cloud
+   fire is a fresh session with no memory of the last one. Each routine keeps its
+   OWN distinctly-named handoff doc so no agent ever reads or overwrites another's:
+   - auto-run-A → `autoresearch/HANDOFF.run-a.md`
+   - auto-run-B → `autoresearch/HANDOFF.run-b.md`
+   - auto-research → `autoresearch/HANDOFF.research.md`
+   - auto-tinker → `autoresearch/HANDOFF.tinker.md`
+
+   (Template: `autoresearch/HANDOFF.template.md`.) Rules:
+   - **Read ONLY your own handoff file at session start**, FIRST, before picking an
+     action — to recover what your previous session was mid-way through (which
+     variant/experiment, which stock, next step, gotchas). Do NOT read or write any
+     other routine's HANDOFF file; those are private to each agent so one never
+     influences another. (Cross-routine coordination happens ONLY through the
+     explicit shared surfaces: FRONTIER champion rows, CANDIDATES, READOUT
+     `NEW CHAMPION` lines, NEEDS_HUMAN — never through handoffs.)
+   - **Write ONLY your own handoff file**, as you go and again right before the
+     session ends (do it early/often — a session can be cut off without warning):
+     current task, exact progress (e.g. "v26 panel: 6/10 done, HDFCBANK next"), the
+     immediate next step, and anything the next session must not re-do. Commit +
+     push it with your other progress. Required, not optional.
+   - auto-tinker's NEEDS_HUMAN/FRONTIER consolidation does NOT touch any HANDOFF
+     file — handoffs are excluded from all cross-branch reconciliation.
 
 **auto-tinker also consolidates NEEDS_HUMAN.md**: at session start, in addition to
 reconciling the CHAMPION rows, scan the other branches' `NEEDS_HUMAN.md` for open
