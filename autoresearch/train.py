@@ -17,6 +17,12 @@ val is what you optimise; test is REPORT-ONLY (never select on it). A large
 val-vs-test gap means the change is overfitting the proxy — treat as a red flag.
 """
 import os
+# Thread/BLAS caps must be set BEFORE numpy/torch import to take effect. Rl_v18
+# sets these too, but it is imported AFTER numpy here, so replicate them at the very
+# top so the caps actually apply in the harness (keeps runs deterministic and light).
+for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "TF_NUM_INTRAOP_THREADS", "TF_NUM_INTEROP_THREADS"):
+    os.environ.setdefault(_v, "1")
 import sys
 import random
 import copy

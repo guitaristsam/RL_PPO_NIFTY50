@@ -67,14 +67,21 @@ This system is meant to run forever with zero human interference. Obey these:
    `autoresearch/STOP` on `auto/tinker`).
 8. **Overlap lease (avoid two sessions on one branch).** Both nightly waves (2:30
    and 4:30 IST) can fire while a prior session on your branch is still running.
-   Guard against it: at session start, `git fetch origin <your-branch>` and read
-   `autoresearch/.lease-<routine>` from it; if that lease timestamp is **less than
-   2.5 hours old**, another session of yours is likely still active — exit
-   immediately. Otherwise write `autoresearch/.lease-<routine>` with the current UTC
-   time, commit+push it, and proceed; refresh it as you work. A stale lease (>2.5h)
-   is treated as dead and overridden. (A concurrent push that gets rejected
-   non-fast-forward is also a signal another session is live — if so, exit and let
-   it continue rather than fighting the branch.)
+   The AUTHORITATIVE mutex is the push: a concurrent push rejected non-fast-forward
+   means another session is live — if that happens, **exit and let it continue, do
+   not retry/fight the branch**. The lease below is only an early-out so the second
+   wave doesn't waste a whole session before hitting that rejection.
+   - At session start, `git fetch origin <your-branch>` and read
+     `autoresearch/.lease-<routine>` from it. If it exists AND its timestamp is
+     **< 2.5 h old**, another session is likely active — exit immediately. A stale
+     lease (>2.5 h, i.e. a crashed session) is overridden.
+   - Otherwise write `autoresearch/.lease-<routine>` with the current UTC time,
+     commit+push, proceed, and refresh it as you work.
+   - **On clean session end, DELETE `autoresearch/.lease-<routine>`, commit+push.**
+     This is required: without release, a wave-1 session that finishes at ~3:15
+     leaves a ~1.25 h-old lease and the 4:30 wave-2 fire would wrongly exit,
+     silently halving nightly throughput. The 2.5 h staleness override is ONLY the
+     crash-recovery path, not the normal release mechanism.
 9. **Keep branches lean (unattended for weeks).** `models_*/` and `.ta_cache/` are
    already gitignored. Also avoid committing bulky per-stock CSVs
    (`account_value.csv`, `trades.csv`, `actions.csv`) if the branch is growing large

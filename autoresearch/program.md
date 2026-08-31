@@ -22,9 +22,11 @@ re-read it at the start of every session. The pattern is adapted from
      the **calibrated noise gate** (see "Calibrate the gate" below; default +3.0 pp
      until measured). A smaller gain is seed/slice noise, not signal. On keep:
      `git add -A && git commit` with the metric in the message, and prepend a row to
-     `log.md`. Require the win on **two seeds** (rerun the kept config at a second
-     SEED) before promoting anything to CANDIDATES — a one-seed win can be a lucky
-     draw and would waste a full-panel night.
+     `log.md`. Require the win on **two seeds** before promoting anything to
+     CANDIDATES: rerun the kept config at a second SEED (e.g. 43) and promote only if
+     it ALSO clears the gate vs the pre-change baseline at that seed; restore
+     `SEED = 42` afterward. A one-seed win can be a lucky draw and would waste a
+     full-panel night.
    - **Discard** otherwise: `git checkout -- autoresearch/train.py` to revert, and
      still append a one-line row to `log.md` (negative results are data — they
      stop you and others re-trying the same thing).
@@ -40,7 +42,10 @@ then `43`, then `44` — `SEED` is in the agent-editable block) and record the t
 `mean_val_outperf_pp` values in `log.md`. Set the working gate to
 `max(3.0 pp, 2 × stdev(those three))` and write that gate value at the top of
 `log.md`. Every later keep/discard uses that calibrated gate. Re-measure if you
-change `BUDGET_TIMESTEPS` or `STOCKS` (both move the floor).
+change `BUDGET_TIMESTEPS` or `STOCKS` (both move the floor). **After calibrating,
+restore `SEED = 42` and keep it fixed for all leaderboard experiments** — the
+leaderboard is only comparable at a constant seed; SEED is varied ONLY for the
+calibration run and the 2-seed confirmation.
 
 ## Hard rules (do not violate)
 
@@ -54,6 +59,12 @@ change `BUDGET_TIMESTEPS` or `STOCKS` (both move the floor).
   result. Do not try to defeat that assert. (Note: `test_indicator_causality.py`
   audits the frozen v18 `list_of_indicators`, NOT `train.py`'s `INDICATORS`, so it
   is NOT the gate here — the import-time assert is.)
+- **The assert only covers `INDICATORS`.** If you make a reward/env/split change
+  (the "one localized change" allowed for advanced ideas), the leakage guard does
+  NOT cover it — YOU must preserve the leak-safe invariants: ffill-only (never
+  bfill), no future-peeking in the reward, and do not alter the 70/15/15 split
+  fractions or the train-only scaler fit. A metric that jumps suspiciously after an
+  env/reward edit is a leak until proven otherwise — discard it.
 - **Never select on the test number.** `mean_test_outperf_pp` is REPORT-ONLY. Use
   it only as a red flag: if val improves a lot but test does not (or moves the
   other way), the change is overfitting the proxy — discard it and note why.
