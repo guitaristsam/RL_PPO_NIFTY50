@@ -13,6 +13,39 @@ old baseline. Chase the frontier; do not keep re-forking from a superseded confi
 
 ---
 
+## DURABILITY CONTRACT — read every session (all four routines)
+
+This system is meant to run forever with zero human interference. Obey these:
+
+1. **Never block on a human.** Do not wait for a merge, an approval, or an answer.
+   Everything you need is on the branches (read via `git fetch` / `git show
+   origin/<branch>:<path>` — no merge to `main` is ever required to coordinate).
+2. **`main` is not the source of truth — this FRONTIER is.** The CHAMPION sections
+   here are the living baseline. Fork new work from the champion, not from whatever
+   `main`/CLAUDE.md says (that is historical). A confirmed champion does NOT need to
+   be merged to `main` to be built upon.
+3. **If something ACTUALLY needs the human, write it, don't wait.** Append a dated
+   entry to `autoresearch/NEEDS_HUMAN.md` (auth failures, infra that blocks all
+   progress, real-world-consequence decisions, or a request to bless a champion
+   into production). Then immediately continue with the next best autonomous
+   action. Never let a human-needed item stall the night.
+4. **Self-heal, don't crash the night.** If a task fails, retry once; if it still
+   fails, log it (one line in NEEDS_HUMAN.md only if it blocks *all* progress,
+   otherwise a note in your READOUT/log) and move to the next best action. A single
+   broken variant or stock must not stop the rest of the work.
+5. **The loop is open-ended.** When the queue and candidates are exhausted, keep
+   generating value: tinker invents new single-variable changes, research proposes
+   new forks from the champion, run routines validate them and expand the panel.
+   There is always a next best action — take it.
+
+**auto-tinker also consolidates NEEDS_HUMAN.md**: at session start, in addition to
+reconciling the CHAMPION rows, scan the other branches' `NEEDS_HUMAN.md` for open
+entries (`git show origin/auto/run-a:autoresearch/NEEDS_HUMAN.md` etc.), merge any
+into the authoritative copy on `auto/tinker`, and push — so the human has ONE inbox
+to check.
+
+---
+
 ## CHAMPION — full 10-stock panel (production truth)
 
 The best *confirmed* variant on the full panel, measured as mean outperformance
