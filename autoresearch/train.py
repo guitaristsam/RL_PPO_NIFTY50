@@ -65,7 +65,21 @@ SEED = 42
 # REORDER this audited list. NEVER add a name that is not already in it — every
 # name here has passed test_indicator_causality.py; unaudited names can leak the
 # future and silently inflate the metric.
-INDICATORS = list(AUDITED_INDICATORS)
+# v26 curated 22-indicator subset — fewer features to reduce overfit
+INDICATORS = [
+    # trend / direction
+    'ADX_14', 'DMP_14', 'DMN_14', 'MACD_12_26_9', 'MACDh_12_26_9',
+    'AROONOSC_14', 'SUPERTd_7_3.0',
+    # momentum / oscillators
+    'RSI_14', 'ROC_10', 'MOM_10', 'CMO_14', 'STOCHk_14_3_3', 'WILLR_14',
+    'TSI_13_25_13',
+    # volatility
+    'ATRr_14', 'NATR_14', 'BBP_5_2.0', 'STDEV_30',
+    # volume / flow
+    'MFI_14', 'CMF_20', 'EFI_13',
+    # returns
+    'LOGRET_1',
+]
 
 # RecurrentPPO hyperparameters (copied from the v18 baseline). Fair game to tune.
 PPO_PARAMS = {
