@@ -18,8 +18,12 @@ Running v21 full 10-stock panel (target-exposure action: action∈[0,1]=capital 
 - All deps installed: numpy, pandas, torch, stable-baselines3, sb3-contrib, finrl, matplotlib, scipy, tensorboard
 
 ## Progress
-Panel: 0/10 stocks done (starting fresh)
-Stocks: RELIANCE, INFY, TATAMOTORS, ITC, ADANIENT, HDFCBANK, TCS, SBIN, AXISBANK, HINDALCO
+Panel: 1/10 stocks done
+Done: RELIANCE (-61.50pp outperf, 456 trades, Sharpe 0.142, MaxDD -16.13%)
+  - v18 was -36.89pp, v21 worse by ~25pp — huge cost drag (456 vs 113 trades)
+  - Early signal: v21 may fail due to excessive turnover from target-exposure action
+In-progress: INFY (background, started ~00:00 UTC)
+Remaining: TATAMOTORS, ITC, ADANIENT, HDFCBANK, TCS, SBIN, AXISBANK, HINDALCO
 
 ## Running
 Command: python run_panel.py v21
