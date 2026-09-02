@@ -1,42 +1,51 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-01T00:00:00Z
+Last updated: 2026-09-02T03:00:00Z
 
-## Current task
-Running v21 full 10-stock panel (target-exposure action: action∈[0,1]=capital fraction).
+## Status: SESSION COMPLETE
 
-## Why v21 (not v22 or v20)
-- run-a is doing v26 (feature reduction) — no conflict
-- Advisor recommended v21 over v20: v20 only re-ranks 3 checkpoints per stock (ceiling bounded), v21 changes what the policy expresses
-- v22 requires 3x compute (30 training runs), not feasible in one session
-- v21 has env-math test coverage (test_variant_envs.py) — both tests now PASS
+v21 10-stock panel: DONE. PR opened. Lease deleted. Session ending.
 
-## Environment setup done
-- pandas_ta 0.4.71b0 installed; patched hma.py for Python 3.11 compat
-- finrl patched: __init__.py wrapped in try/except to skip alpaca/broker imports
-- test_variant_envs.py: 2/2 tests pass (v19 reward + v21 action math)
-- All deps installed: numpy, pandas, torch, stable-baselines3, sb3-contrib, finrl, matplotlib, scipy, tensorboard
+---
 
-## Progress
-Panel: 1/10 stocks done
-Done: RELIANCE (-61.50pp outperf, 456 trades, Sharpe 0.142, MaxDD -16.13%)
-  - v18 was -36.89pp, v21 worse by ~25pp — huge cost drag (456 vs 113 trades)
-  - Early signal: v21 may fail due to excessive turnover from target-exposure action
-In-progress: INFY (background, started ~00:00 UTC)
-Remaining: TATAMOTORS, ITC, ADANIENT, HDFCBANK, TCS, SBIN, AXISBANK, HINDALCO
+## What was done (2026-09-01/02 nightly session)
 
-## Running
-Command: python run_panel.py v21
+**Variant:** v21 — target-exposure action (`(a+1)/2 ∈ [0,1]` = capital fraction)
 
-## Next steps
-1. Run panel; commit+push after each stock
-2. After panel: summarize_results, significance, baselines → write results_v21/READOUT.md
-3. If v21 beats v18 baseline (-63.2pp, 1/10 beats B&H), mark NEW CHAMPION
-4. Open PR to main
+**Result: NOT A NEW CHAMPION. REJECTED.**
+
+| metric | v21 | v18 (10-panel) |
+|--------|-----|----------------|
+| mean outperf | -73.16pp | -38.8pp |
+| beats B&H | 0*/10 | 1/10 |
+| avg trades | 243.7 | ~90 |
+
+*ADANIENT's 9-trade beat is near-degenerate cash-hold, not skill.
+
+Root cause: 2.7x more trades → avg ₹1,900 transaction costs = 19% of capital.
+TATAMOTORS catastrophic: PPO -10.7% vs B&H +251% → -261.65pp outperf.
+ITC control: v18 +40pp → v21 -44pp. Action-space change destroyed the B&H-beat.
+
+## PR
+
+https://github.com/guitaristsam/RL_PPO_NIFTY50/pull/3 (draft, auto/run-b → main)
+
+## Environment setup
+
+- pandas_ta 0.4.71b0 + hma.py patched for Python 3.11
+- finrl __init__.py wrapped in try/except
+- run_one_v21.py: sets env vars before importing Rl_v21 (module-level RESULTS_DIR)
+- run_panel_v21_with_commits.sh: sequential panel runner
+
+## Next recommended experiment
+
+1. **v19** (B&H-relative reward) — highest leverage on trending-stock failure mode
+2. Wait for v26 results from run-a first (feature reduction, anti-overfit)
+3. v20 (best-by-Sharpe) after v26 results
 
 ## Gotchas for next session
-- Expect higher trade counts vs v18 (a=0 = 50% exposure, not hold)
-- Watch for cost drag from higher turnover
-- ITC control: v18 had +40pp outperf; if that degrades, check if v21 is flipping to idle
-- HDFCBANK is likely still a loser — feature-untrainable
-- Resume guard: if results_v21/{SYMBOL}/{SYMBOL}_report.txt exists, stock is skipped
+
+- v18 10-panel baseline is -38.8pp (not -63.2pp from old FRONTIER.md)
+- FRONTIER.md figure may be stale; recompute from results_v18/ before quoting
+- Any future action-space or position-sizing change: cap hmax or add turnover penalty
+- v21 models in models_v21/ are NOT committed (gitignored); re-train from Rl_v21.py if needed
