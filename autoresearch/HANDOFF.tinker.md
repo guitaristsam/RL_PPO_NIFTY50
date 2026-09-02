@@ -25,7 +25,7 @@ Keep experimenting for secondary insights; log all results.
 - [x] exp11: n_steps 512→1024 — DISCARD (-75.125pp; test +26.439pp, all 3 beat B&H notable)
 - [x] exp12: 11-indicator trend set — DISCARD (-86.689pp)
 - [x] exp13: BUDGET 60k→80k — DISCARD (-8.686pp, ≈ same as champion)
-- [ ] exp14: gamma 0.99→0.95 — IN PROGRESS (background run b53ccr1xe)
+- [x] exp14: gamma 0.99→0.95 — DISCARD (+5.560pp, +13.4pp over champion, under gate)
 - [ ] exp15: n_lstm_layers 1→2 (deeper LSTM)
 - [ ] exp16: vf_coef 0.5→1.0 (higher critic weight)
 - [ ] exp17: batch_size 64→128 (larger minibatches)
@@ -37,22 +37,21 @@ Keep experimenting for secondary insights; log all results.
 - BUDGET_TIMESTEPS = 60000 (reverted from 80k)
 - SEED = 42
 - INDICATORS: 22-indicator v26 curated set (champion config)
-- gamma = 0.95 (exp14 change; revert to 0.99 when done)
+- gamma = 0.99 (champion config; exp14 reverted)
 
 ## Uncommitted changes
 
-- autoresearch/log.md — experiments 2-13 added
-- autoresearch/FRONTIER.md — proxy champion updated
-- autoresearch/train.py — reverted to 60k budget, gamma=0.95 for exp14
+- autoresearch/log.md — exp14 result added
+- autoresearch/HANDOFF.tinker.md — exp14 marked done
 
 ## Next step
 
-1. Wait for exp14 (b53ccr1xe) result
-2. Log exp14, revert gamma to 0.99
-3. Run exp15: n_lstm_layers=2
-4. Run exp16: vf_coef=1.0
-5. Commit all (log.md, FRONTIER.md, HANDOFF.tinker.md)
-6. Push and open PR via GitHub MCP
+1. Run exp15: n_lstm_layers=2 (deeper LSTM, more temporal capacity)
+2. Run exp16: vf_coef=1.0 (higher critic weight)
+3. Run exp17: batch_size=128 (larger minibatches)
+4. Run exp18: n_epochs=3 (fewer gradient steps per rollout; may reduce overfit)
+5. Consider recalibrating panel (swap TATAMOTORS for ITC or different stock)
+6. Commit+push each experiment
 
 ## Gotchas
 

@@ -30,6 +30,7 @@ screen is noisy — future sessions should consider recalibrating with a differe
 
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|
+| 14 | 2026-09-02 | gamma 0.99→0.95 (shorter time horizon, less discounting) | +5.560 | -69.932 | DISCARD (+13.4pp over champion, under gate; HDFCBANK +0.58pp — near-zero) | — |
 | 13 | 2026-09-02 | BUDGET_TIMESTEPS 60k→80k (more training budget, recalibration attempt) | -8.686 | -39.935 | DISCARD (-0.8pp vs champion; 80k≈60k, gate unchanged) | — |
 | 12 | 2026-09-02 | INDICATORS: trend-focused 11-set (MACD full + ADX/DMP/DMN + RSI/MOM + ATR/LOGRET) | -86.689 | -90.372 | DISCARD | — |
 | 11 | 2026-09-02 | n_steps 512→1024 (longer rollouts, more LSTM context per update) | -75.125 | +26.439 | DISCARD (note: test all 3 beat B&H) | — |
