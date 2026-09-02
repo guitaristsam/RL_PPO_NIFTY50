@@ -35,19 +35,21 @@ Independent Opus advisor recommended:
 - [x] exp12: 11-indicator trend set — DISCARD (-86.689pp)
 - [x] exp13: BUDGET 60k→80k — DISCARD (-8.686pp, ≈ same as champion)
 - [x] exp14: gamma 0.99→0.95 — DISCARD (+5.560pp, +13.4pp over champion, under gate)
-- [ ] exp15: n_lstm_layers 1→2 — RUNNING (session 3; advisor says contraindicated but logging result)
-- [ ] exp16: n_epochs 5→3 (renamed from exp18; advisor top pick)
+- [x] exp15: n_lstm_layers 1→2 — DISCARD (-59.684pp; advisor confirmed contraindicated)
+- [ ] Panel recalibration seed 42 — RUNNING (RELIANCE/ITC/HDFCBANK; v26 artifacts invalidated original panel)
+- [ ] Panel recalibration seed 43
+- [ ] Panel recalibration seed 44 → set new gate
+- [ ] exp16: n_epochs 5→3 (advisor top pick, after recalibration)
 - [ ] exp17: n_steps=256 + gamma=0.95 (combination, exploratory)
 - [ ] exp18: batch_size 64→128 (weaker prior)
-- [ ] exp19: Panel recalibration — swap STOCKS, recalibrate gate
 
 ## Current train.py state
 
-- STOCKS = ["RELIANCE", "TATAMOTORS", "HDFCBANK"]
+- STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]  ← PANEL CHANGED for recalibration
 - BUDGET_TIMESTEPS = 60000
 - SEED = 42
-- INDICATORS: 22-indicator v26 curated set (champion config)
-- n_lstm_layers = 2 (exp15 change — will revert to 1 after run)
+- INDICATORS: 22-indicator v26 curated set (proxy baseline)
+- n_lstm_layers = 1 (reverted after exp15)
 
 ## Uncommitted changes
 
@@ -56,12 +58,12 @@ Independent Opus advisor recommended:
 
 ## Next step
 
-1. Wait for exp15 completion notification
-2. Log exp15 result in log.md, revert n_lstm_layers to 1
-3. Apply exp16 (n_epochs 5→3), run
-4. Apply exp17 combination (n_steps=256 + gamma=0.95), run
-5. exp18 batch_size 128
-6. Consider panel recalibration (swap STOCKS for ITC/RELIANCE/HDFCBANK, recalibrate gate at 3 seeds)
+1. Wait for panel recalibration seed 42 (ITC panel) result
+2. Then SEED=43 recalibration (change SEED in train.py)
+3. Then SEED=44 recalibration → compute new gate = max(3pp, 2*stdev)
+4. Set SEED=42, then run exp16 (n_epochs 5→3) on new panel
+5. exp17 combination n_steps=256 + gamma=0.95
+6. exp18 batch_size 128
 
 ## Gotchas
 

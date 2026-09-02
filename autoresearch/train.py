@@ -53,7 +53,7 @@ from sb3_contrib import RecurrentPPO
 # =====================================================================
 # Panel of stocks the metric averages over. A 3-stock panel (a clean winner, a
 # strong trend, a hard case) is a far lower-variance screen than one stock.
-STOCKS = ["RELIANCE", "TATAMOTORS", "HDFCBANK"]
+STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]
 
 # Fixed training budget in env timesteps. Deterministic and comparable across
 # machines (unlike wall-clock). 200k is production; this is a fast screen.
