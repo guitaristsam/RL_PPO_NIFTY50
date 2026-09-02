@@ -62,6 +62,8 @@ ITC panel recalibration complete (2026-09-02). Gate = 94.2pp, baseline (seed=42)
 
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|
+| ITC-2 | 2026-09-02 | n_epochs 5→3 (fewer gradient steps) | -108.092 | -30.826 | DISCARD (−98.9pp vs baseline; n_epochs=5 is optimal) | — |
+| ITC-1 | 2026-09-02 | baseline ITC panel (SEED=42, 22 indicators, v18 hyperparams) | **-9.194** | -5.730 | **BASELINE** | — |
 
 ## TATAMOTORS panel experiments (RELIANCE/TATAMOTORS/HDFCBANK, gate=60.4pp, baseline=-7.855pp — INVALIDATED)
 
