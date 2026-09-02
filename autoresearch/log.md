@@ -2,7 +2,8 @@
 
 Newest first. One row per experiment. `mean_val_outperf_pp` is the objective
 (higher is better); `test` is report-only. Keep a change only if val beats the
-current best by ≥ +**60.4 pp** (calibrated gate). See `program.md`.
+current best by ≥ +**94.2 pp** (ITC panel calibrated gate, 2026-09-02).
+Prior gate was 60.4pp (TATAMOTORS panel, now invalidated). See `program.md`.
 
 ## Noise gate recalibration (2026-09-02) — RELIANCE/ITC/HDFCBANK panel
 
@@ -13,9 +14,13 @@ Calibration still in progress (seeds 43/44 running):
 |---|---|---|---|
 | 42 | +5.67pp (RELIANCE+ITC together) | -33.25pp | **-9.194** |
 | 43 | -245.86pp (RELIANCE+ITC together) | -41.69pp | **-95.850** |
-| 44 | TBD | TBD | TBD |
+| 44 | -245.87pp (RELIANCE+ITC together) | -86.19pp | **-84.483** |
 
-New gate = max(3.0pp, 2 × stdev of seeds 42/43/44) — TBD when all seeds complete.
+- stdev([-9.194, -95.850, -84.483]) = 47.1pp
+- **Gate = max(3.0pp, 2 × 47.1pp) = 94.2pp**
+- Baseline (SEED=42) = **-9.194pp** → must beat **+85.0pp** to keep
+
+**Gate analysis:** The ITC panel gate (94.2pp) is also unreachable. HDFCBANK val ≈ −33 to −86pp across seeds; RELIANCE and ITC are highly variable. Seed-to-seed range of 86pp (seed 42: −9.2pp vs seed 43: −95.9pp) reflects that 60k steps is not enough for stable training. The ITC panel baseline at seed=42 (−9.194pp) is much healthier than the TATAMOTORS panel (−75.552pp), confirming TATAMOTORS was degenerate. All experiments should compare to the seed=42 baseline (−9.194pp) for directional signal.
 
 ---
 
@@ -51,7 +56,14 @@ ITC: +40pp (v18) → -61pp (v26), TATAMOTORS: -24pp (v18) → -149pp (v26). **v2
 The proxy champion (exp1: 22 indicators) is the same TATAMOTORS degenerate artifact.
 TATAMOTORS seed=42 proxy val +177pp = holding cash while B&H loses -55.75%.
 Implication: all 15 proxy experiments are unreliable — the proxy panel must be recalibrated.
-Next session should swap TATAMOTORS→ITC and recalibrate gate (RELIANCE/ITC/HDFCBANK).
+ITC panel recalibration complete (2026-09-02). Gate = 94.2pp, baseline (seed=42) = -9.194pp.
+
+## ITC panel experiments (RELIANCE/ITC/HDFCBANK, gate=94.2pp, baseline=-9.194pp at seed=42)
+
+| # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
+|---|---|---|---|---|---|---|
+
+## TATAMOTORS panel experiments (RELIANCE/TATAMOTORS/HDFCBANK, gate=60.4pp, baseline=-7.855pp — INVALIDATED)
 
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|

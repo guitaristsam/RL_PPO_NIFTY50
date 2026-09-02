@@ -59,7 +59,7 @@ STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]
 # machines (unlike wall-clock). 200k is production; this is a fast screen.
 BUDGET_TIMESTEPS = 60000
 
-SEED = 44
+SEED = 42
 
 # Indicator set fed to the policy. SAFETY RULE: you may only REMOVE from or
 # REORDER this audited list. NEVER add a name that is not already in it — every
@@ -86,7 +86,7 @@ PPO_PARAMS = {
     "learning_rate": 3e-4,
     "n_steps": 512,
     "batch_size": 64,
-    "n_epochs": 5,
+    "n_epochs": 3,
     "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_range": 0.2,
