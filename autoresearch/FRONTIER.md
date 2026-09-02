@@ -109,11 +109,17 @@ vs buy-and-hold. This is what new production variants must beat.
 
 | variant | mean outperf vs B&H | beats-B&H count | notes |
 |---|---|---|---|
-| **v18 (baseline)** | −63.2pp | 1/10 | current champion; see CLAUDE.md v18 panel table |
+| **v18 (baseline)** | −63.2pp | 1/10 | **PRODUCTION CHAMPION** — genuine policies, see CLAUDE.md |
+| ~~v26 (bookkeeping)~~ | −51.49pp | 2/10 | ⚠️ ARTIFACT: both B&H-beats are degenerate cash-holds (ADANIENT 0 trades, HDFCBANK 5 trades). ITC −101pp regression. **Do NOT build on v26.** See results_v26/READOUT.md on auto/run-a. 2026-09-02. |
 
-> Update when a run routine's readout shows a variant with a better mean outperf
-> (and ideally more beats-B&H) than the row above. Move the winner to the top and
-> note the date + results dir.
+> v26 takes the ratchet on raw mean outperf but is flagged as an inactivity artifact by run-A.
+> v18 remains the production champion for the purpose of building new variants.
+> Next production challenger needs to beat v18 with GENUINE active policies (≥20 trades/stock).
+
+**Invalidated proxy win:** The auto-tinker 22-indicator proxy champion (-7.855pp) is the same
+degenerate artifact. TATAMOTORS val cash-hold produces artificial +177pp; removing that stock's
+contribution, the proxy panel is genuinely losing. Proxy experiments on the v26 22-indicator
+baseline are unreliable directional screens. Consider reverting proxy to v18 106 indicators.
 
 ## CHAMPION — fast proxy (autoresearch screen)
 
@@ -133,19 +139,12 @@ Any routine may add/reorder. Pick the top item you are equipped to run. When you
 finish one, strike it through and record the outcome (win → update a CHAMPION
 section; loss → note it so nobody retries it).
 
-~~0. (tinker, FIRST NIGHT ONLY) Calibrate the metric noise floor before trusting any
-   win: run the unmodified baseline at SEED 42/43/44, record in log.md, set the gate
-   to max(3pp, 2σ). See program.md "Calibrate the gate".~~ **DONE 2026-09-01. Gate=60.4pp.**
-1. (run) Validate the next unrun queued variant on the full panel: **v26** (priority — proxy
-   confirmed 22-indicator reduces overfit), v22, v20, v21, v23 — but if a proxy CANDIDATE
-   outranks these, validate that first.
-2. (tinker) **Gate analysis**: 60.4pp gate is unreachable with current 3-stock panel; consider
-   recalibrating with different STOCKS panel or more seeds per config. Current best is exp1
-   (22 indicators). From that baseline, n_steps=256 and LSTM=64 both showed +9-17pp, under gate.
-   Next sessions should try: (a) n_steps=256 + LSTM=64 combination IF the panel changes; (b)
-   recalibrate with a different panel (e.g. RELIANCE/ITC/HDFCBANK replacing TATAMOTORS).
-3. (research) Explain why 22 indicators beats 106: v26 thesis — fewer features, less overfit,
-   faster convergence at 60k steps. Propose next fork from the 22-indicator champion.
+~~0. (tinker, FIRST NIGHT ONLY) Calibrate the metric noise floor.~~ **DONE 2026-09-01. Gate=60.4pp.**
+~~1. (run) Validate v26 on full panel.~~ **DONE 2026-09-01/02 by run-A. v26 = BOOKKEEPING ARTIFACT. See results_v26/READOUT.md on auto/run-a.**
+2. (tinker) **Panel recalibration — HIGH PRIORITY.** Swap TATAMOTORS→ITC. The current 3-stock panel is broken: TATAMOTORS seed=42 val is a degenerate cash-hold (+177pp), making any result on this panel suspect. New panel: STOCKS=["RELIANCE","ITC","HDFCBANK"]. Requires 3-seed recalibration. Current proxy experiments are directional only, not trustworthy.
+3. (tinker) After recalibration: n_epochs 5→3 (advisor top pick), then n_steps=256 + gamma=0.95 combo.
+4. (run) Validate v19 (B&H-relative reward) on full panel — v26 READOUT explicitly recommends this as next lever. Auto-research also proposed v27–v34 forks from v26 (reward/architecture changes). Avoid feature-reduction forks — they are now invalidated by v26 panel results.
+5. (research) Propose next variant fork from v18 baseline (NOT v26): reward shape (v19-style alpha-relative), or architectural change that improves generalization without reducing features.
 
 ## CANDIDATES pending full-panel validation
 

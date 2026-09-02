@@ -28,8 +28,19 @@ TATAMOTORS max ~+15pp (can't hold all cash, B&H=-55.75%), RELIANCE max ~+10pp, H
 achievable mean ≈ +11.7pp, far below +52.5pp threshold. The gate correctly captures that the proxy
 screen is noisy — future sessions should consider recalibrating with a different panel or more seeds.
 
+## Critical finding (2026-09-02): v26 proxy win was a degenerate artifact
+
+auto/run-a completed v26 full 10-stock panel (2026-09-02). Mean outperf -51.49pp vs v18 -63.2pp.
+Both B&H-beating stocks are degenerate cash-holds (ADANIENT 0 trades, HDFCBANK 5 trades).
+ITC: +40pp (v18) → -61pp (v26), TATAMOTORS: -24pp (v18) → -149pp (v26). **v26 is NOT a win.**
+The proxy champion (exp1: 22 indicators) is the same TATAMOTORS degenerate artifact.
+TATAMOTORS seed=42 proxy val +177pp = holding cash while B&H loses -55.75%.
+Implication: all 15 proxy experiments are unreliable — the proxy panel must be recalibrated.
+Next session should swap TATAMOTORS→ITC and recalibrate gate (RELIANCE/ITC/HDFCBANK).
+
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|
+| 15 | 2026-09-02 | n_lstm_layers 1→2 (deeper LSTM, more temporal capacity) | -59.684 | -11.684 | DISCARD (−51.8pp vs champion; advisor confirmed contraindicated — adds overfit capacity) | — |
 | 14 | 2026-09-02 | gamma 0.99→0.95 (shorter time horizon, less discounting) | +5.560 | -69.932 | DISCARD (+13.4pp over champion, under gate; HDFCBANK +0.58pp — near-zero) | — |
 | 13 | 2026-09-02 | BUDGET_TIMESTEPS 60k→80k (more training budget, recalibration attempt) | -8.686 | -39.935 | DISCARD (-0.8pp vs champion; 80k≈60k, gate unchanged) | — |
 | 12 | 2026-09-02 | INDICATORS: trend-focused 11-set (MACD full + ADX/DMP/DMN + RSI/MOM + ATR/LOGRET) | -86.689 | -90.372 | DISCARD | — |
