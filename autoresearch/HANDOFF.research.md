@@ -19,7 +19,11 @@ _Last session: 2026-09-02 (UTC). Fresh cold-resume every fire — read this FIRS
 - Rl_v31.py (UNRUN draft): v26 + linear LR decay. Compiles, 22 indicators intact.
 - Rl_v34.py (UNRUN draft): v26 + gSDE (use_sde=True). Compiles. CAVEAT flagged:
   verify sb3-contrib RecurrentPPO accepts use_sde before trusting.
-- PR to main opened (draft).
+- PR to main #4 opened (DRAFT) and updated: https://github.com/guitaristsam/RL_PPO_NIFTY50/pull/4
+- SECOND batch added: v35 (turnover penalty, targets INFY over-trading) + v36
+  (DESIGN-ONLY stack of n_steps=256+lstm=64, gated behind full-panel single-var
+  confirmation — answers FRONTIER next-action #2). variants.md now covers v27-v36.
+- Subscribed to PR #4 activity. Two advisor passes done; all pre-PR fixes applied.
 
 ## Immediate next steps for the NEXT research session
 1. If champion moved again (read FRONTIER), re-anchor. If any of v27–v34 was run
