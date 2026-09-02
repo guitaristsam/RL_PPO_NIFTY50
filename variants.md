@@ -356,6 +356,15 @@ leaves most of the gradient path clean.
   (`state[1 + 2*stock_dim :]`, leave cash/price/shares untouched) and zeroes
   the masked entries. Not applied in `ValidationCallback`'s eval env or
   `test_ppo_model` (mask off ⇒ deterministic, full-observation inference).
+- **Semantics (advisor — do not mislabel).** Because the mask is applied *after*
+  `VecNormalize`, a masked entry is set to 0 in normalized space, i.e. to the
+  feature's **running mean** — this is training-mean *imputation*, not a true
+  "drop" of the feature. That is a defensible (arguably better-behaved)
+  regularizer, but describe it as mean-imputation, not absence. Note also there
+  is no `1/(1-p)` survivor rescale, so the expected activation magnitude of the
+  indicator block shifts slightly at `p=0.10`; either add the rescale (classic
+  inverted-dropout) or accept the small shift and note it. Single variable
+  either way = the mask probability `p`.
 - Everything else byte-identical to v26.
 
 **How to run.** `python run_panel.py v27`
@@ -422,7 +431,17 @@ mean over K sub-windows)
   sub-windows. On each eval, run the deterministic policy through each
   sub-window, compute per-window outperformance vs its own B&H, and set
   `val_score = mean(outperf_k)`. Save the best-`val_score` checkpoint (keep the
-  existing `min_val_trades` gate summed across windows, and the 100k warmup).
+  existing `min_val_trades` gate, applied **per sub-window** — see caveat — and
+  the 100k warmup).
+- **Sub-window length / variance caveat (advisor).** The val slice is only ~15%
+  of a few-thousand-bar series (~300 bars), so `K=3` gives ~100-bar sub-windows.
+  Outperformance over ~100 bars can rest on a handful of trades, so each
+  per-window number is itself high-variance — the mean-of-3 is only clearly
+  more stable than the single window if each sub-window clears a **per-window
+  min-trades guard** (e.g. ≥3 trades); windows below that are dropped from the
+  mean rather than counted as 0. If most sub-windows fail the guard, `K=3` is too
+  fine for this val length — fall back to `K=2`. State the realized sub-window
+  length in the run log so this is auditable.
 - Everything else byte-identical to v26. *(Sharpe/return-vol-blend scoring is a
   separate one-variable fork — see v20 for the Sharpe version; keep them
   distinct.)*
@@ -455,7 +474,14 @@ non-redundant information (broad regime), not 22nd redundant TA indicator.
   NIFTY50 names already in `data/` (self-contained; no external index file
   needed). Compute its 200-day SMA. Add one observation column
   `MKT_REGIME ∈ {0,1}` = `1[proxy_close > proxy_SMA200]`, aligned by date,
-  causal (SMA is trailing). Indicator list 22 → 23.
+  causal (same-day close vs a *trailing* SMA200 — no look-ahead). Indicator
+  list 22 → 23.
+- **Proxy-construction caveat (advisor).** A cross-sectional mean over "names in
+  `data/`" is composition/survivorship-sensitive: which tickers exist early in
+  the sample biases the proxy, and each date must be aligned before averaging.
+  Require a full 200-bar burn-in before the SMA is valid, and hold the proxy's
+  constituent set fixed across the whole sample (don't let names appear/drop
+  mid-series) so the regime bit isn't secretly tracking universe composition.
 - Everything else byte-identical to v26. *(Honest caveat: this ADDS a feature,
   cutting against the champion direction; it earns its keep only if the bit is
   genuinely orthogonal. If it regresses, that confirms cross-asset info at daily
@@ -530,12 +556,15 @@ López de Prado fix for exactly this leakage
 (https://en.wikipedia.org/wiki/Purged_cross-validation). Pairs with v29 — v29
 makes the val score multi-regime, v33 makes each region clean at its edges.
 
-**Code change.** (single variable vs v26: embargo gap `E`, `0 → 10` bars)
-- After the 70/15/15 chronological split, drop the first `E=10` bars of the val
-  slice and the first `E=10` bars of the test slice (equivalently, insert a
-  10-bar gap at each boundary). Longest indicator lookback here is ~30 bars
-  (`STDEV_30`); `E` between the longest lookback and ~1 bar is defensible — 10
-  is a conservative start, tune later.
+**Code change.** (single variable vs v26: embargo gap `E`, `0 → 30` bars)
+- After the 70/15/15 chronological split, drop the first `E=30` bars of the val
+  slice and the first `E=30` bars of the test slice (equivalently, insert a
+  30-bar gap at each boundary). **`E` must be ≥ the longest indicator lookback**
+  (`STDEV_30` = 30 bars): with a smaller gap the first eval bars' indicators are
+  still computed from rows adjacent to (or inside) train, so the leakage is not
+  actually killed. `E=30` (round to 30–35) is therefore the *minimum* correct
+  value, not a "conservative" one — an earlier draft's `E=10` was under-sized and
+  would have left boundary leakage intact.
 - Everything else byte-identical to v26.
 
 **How to run.** `python run_panel.py v33`
@@ -560,12 +589,16 @@ https://arxiv.org/abs/2005.05719). One-flag, mechanistically new to this
 project, no interaction with the reward or the val signal — a clean
 single-variable fork and a cheap high-information probe.
 
-**Code change.** (single variable vs v26: `use_sde` `False → True`)
-- Add `"use_sde": True` (and `"sde_sample_freq": 4`) to the `RecurrentPPO`
-  kwargs.
-- Everything else byte-identical to v26. *(Note: verify `sb3-contrib`'s
-  `RecurrentPPO` accepts `use_sde` in the pinned version; if not, this fork is
-  blocked and should be logged as such rather than silently dropped.)*
+**Code change.** ("enable gSDE" = two coupled knobs, one conceptual variable vs
+v26: `use_sde` `False → True`, `sde_sample_freq` `-1 → 4`)
+- Add `"use_sde": True` and `"sde_sample_freq": 4` to the `RecurrentPPO` kwargs.
+- **Acceptance confirmed (not deferred).** `RecurrentPPO.__init__` in
+  `sb3-contrib` exposes `use_sde: bool = False` and `sde_sample_freq: int = -1`
+  (verified against the sb3-contrib source, and `requirements.txt` pins
+  `sb3-contrib>=2.2.0`), so this is a real fork, not a silently-ignored no-op.
+  The residual risk is *behavioral*: gSDE on the recurrent `MlpLstmPolicy` — watch
+  entropy/`std` and confirm exploration doesn't collapse. `sde_sample_freq=4`
+  resamples the exploration matrix every 4 steps (`-1` = once per rollout).
 
 **How to run.** `python run_panel.py v34`
 

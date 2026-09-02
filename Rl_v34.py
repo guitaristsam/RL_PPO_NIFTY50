@@ -6,9 +6,11 @@
 # use_sde=True, sde_sample_freq=4. Rationale: smooth, state-consistent
 # exploration noise (Raffin et al., arXiv:2005.05719) improves robustness
 # in continuous control; a clean one-flag probe with no reward/val coupling.
-# CAVEAT: verify the pinned sb3-contrib RecurrentPPO accepts use_sde; if it
-# raises, this fork is BLOCKED — log it, do not silently drop. See
-# variants.md "Rl_v34.py".
+# ACCEPTANCE CONFIRMED: sb3-contrib RecurrentPPO.__init__ exposes
+# use_sde=False and sde_sample_freq=-1 (verified vs source; requirements pins
+# sb3-contrib>=2.2.0), so this is a real fork, not a no-op. Residual risk is
+# behavioral: watch entropy/std for exploration collapse on the LSTM policy.
+# See variants.md "Rl_v34.py".
 # ===========================================================================
 import os
 # Memory / thread caps — must be set BEFORE numpy / torch / TF import.
