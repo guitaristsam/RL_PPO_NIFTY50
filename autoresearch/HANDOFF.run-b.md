@@ -1,51 +1,82 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-02T03:00:00Z
+Last updated: 2026-09-02T21:15:00Z
 
-## Status: SESSION COMPLETE
+## Status: IN PROGRESS — v19 running
 
-v21 10-stock panel: DONE. PR opened. Lease deleted. Session ending.
+**Current task:** v19 (B&H-relative reward) full 10-stock panel
+**Variant:** v19 — reward = clip((log(eq_t/eq_{t-1}) - log(close_t/close_{t-1}))*100, -10, 10) minus DD
 
----
+## Progress
+- RELIANCE: RUNNING (background task bkeutn72m) — first stock, ~10 min per stock
+- 0/10 stocks committed yet
 
-## What was done (2026-09-01/02 nightly session)
+## What was done THIS session
 
-**Variant:** v21 — target-exposure action (`(a+1)/2 ∈ [0,1]` = capital fraction)
+- Set up branch auto/run-b from origin/auto/run-b
+- Read FRONTIER: v26 done by run-a (-51.49pp, 2/10); no CANDIDATES pending
+- Advisor (opus): recommended v19 as top priority (B&H-relative reward for trending stocks)
+- Installed deps: stable-baselines3, sb3-contrib, gymnasium, finrl, matplotlib, scikit-learn, tensorboard, rich, pandas-ta 0.4.71b0
+- Patched: pandas-ta hma.py (Python 3.11), finrl __init__.py (try/except wrapping)
+- Running v19 RELIANCE now
 
-**Result: NOT A NEW CHAMPION. REJECTED.**
+## Setup commands for next session (CRITICAL)
+```bash
+pip install stable-baselines3 sb3-contrib gymnasium matplotlib scikit-learn tensorboard rich "numpy==2.2.6"
+pip install --ignore-requires-python "pandas-ta==0.4.71b0"
 
-| metric | v21 | v18 (10-panel) |
-|--------|-----|----------------|
-| mean outperf | -73.16pp | -38.8pp |
-| beats B&H | 0*/10 | 1/10 |
-| avg trades | 243.7 | ~90 |
+# Patch hma.py for Python 3.11:
+python - << 'PATCH'
+path = '/usr/local/lib/python3.11/dist-packages/pandas_ta/overlap/hma.py'
+with open(path) as f: content = f.read()
+old = '    hma.name = f"HMA{"" if mamode == "wma" else mamode[0]}_{length}"'
+new = '    _mm = "" if mamode == "wma" else mamode[0]\n    hma.name = f"HMA{_mm}_{length}"'
+if old in content:
+    content = content.replace(old, new)
+    with open(path, 'w') as f: f.write(content)
+    print('patched')
+PATCH
 
-*ADANIENT's 9-trade beat is near-degenerate cash-hold, not skill.
+# Patch finrl __init__.py:
+python - << 'PATCH'
+path = '/usr/local/lib/python3.11/dist-packages/finrl/__init__.py'
+with open(path, 'w') as f:
+    f.write("""from __future__ import annotations
+try:
+    from finrl.test import test
+except Exception:
+    pass
+try:
+    from finrl.trade import trade
+except Exception:
+    pass
+try:
+    from finrl.train import train
+except Exception:
+    pass
+""")
+PATCH
+```
 
-Root cause: 2.7x more trades → avg ₹1,900 transaction costs = 19% of capital.
-TATAMOTORS catastrophic: PPO -10.7% vs B&H +251% → -261.65pp outperf.
-ITC control: v18 +40pp → v21 -44pp. Action-space change destroyed the B&H-beat.
+## Running v19 panel
+Results go to: results_v19/ models_v19/
+Command: RESULTS_DIR=results_v19 TRAINED_MODEL_DIR=models_v19 CONSOLIDATED_REPORT=consolidated_report_v19.txt python run_panel.py v19
 
-## PR
+## PANEL stocks (10)
+RELIANCE, INFY, TATAMOTORS, ITC, ADANIENT, HDFCBANK, TCS, SBIN, AXISBANK, HINDALCO
 
-https://github.com/guitaristsam/RL_PPO_NIFTY50/pull/3 (draft, auto/run-b → main)
+## Previous session context
+- v21 was REJECTED: -73.16pp vs v18 -38.8pp, 0/10 beats B&H
+- v26 done by run-a: -51.49pp, 2/10 (improvement but inactivity artifact)
+- PR #3 exists for v21 on auto/run-b → main
 
-## Environment setup
+## Gotchas
+- ~10-15 min per stock on CPU. Full panel ~100-150 min.
+- Resume guard: if results_v19/{SYMBOL}/{SYMBOL}_report.txt exists, stock is skipped
+- v18 10-panel baseline is -38.8pp per run-b's prior measurements (FRONTIER says -63.2pp — stale)
+- Commit after each stock to preserve progress
+- models_v19/ is gitignored — only results_v19/ committed
 
-- pandas_ta 0.4.71b0 + hma.py patched for Python 3.11
-- finrl __init__.py wrapped in try/except
-- run_one_v21.py: sets env vars before importing Rl_v21 (module-level RESULTS_DIR)
-- run_panel_v21_with_commits.sh: sequential panel runner
-
-## Next recommended experiment
-
-1. **v19** (B&H-relative reward) — highest leverage on trending-stock failure mode
-2. Wait for v26 results from run-a first (feature reduction, anti-overfit)
-3. v20 (best-by-Sharpe) after v26 results
-
-## Gotchas for next session
-
-- v18 10-panel baseline is -38.8pp (not -63.2pp from old FRONTIER.md)
-- FRONTIER.md figure may be stale; recompute from results_v18/ before quoting
-- Any future action-space or position-sizing change: cap hmax or add turnover penalty
-- v21 models in models_v21/ are NOT committed (gitignored); re-train from Rl_v21.py if needed
+## Next after v19
+- v20 (best-by-Sharpe) — second priority per advisor
+- v22 (ensemble seeds) — not recommended until root-cause fixed
