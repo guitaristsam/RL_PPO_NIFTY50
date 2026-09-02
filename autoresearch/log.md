@@ -4,6 +4,21 @@ Newest first. One row per experiment. `mean_val_outperf_pp` is the objective
 (higher is better); `test` is report-only. Keep a change only if val beats the
 current best by ≥ +**60.4 pp** (calibrated gate). See `program.md`.
 
+## Noise gate recalibration (2026-09-02) — RELIANCE/ITC/HDFCBANK panel
+
+TATAMOTORS panel invalidated (degenerate cash-hold artifact). Switching to ITC panel.
+Calibration still in progress (seeds 43/44 running):
+
+| seed | RELIANCE+ITC sum | HDFCBANK val | mean_val_outperf_pp |
+|---|---|---|---|
+| 42 | +5.67pp (RELIANCE+ITC together) | -33.25pp | **-9.194** |
+| 43 | TBD | TBD | TBD |
+| 44 | TBD | TBD | TBD |
+
+New gate = max(3.0pp, 2 × stdev of seeds 42/43/44) — TBD when all seeds complete.
+
+---
+
 ## Noise gate calibration (2026-09-01)
 
 Baseline (v18 defaults, BUDGET=60k, panel=RELIANCE/TATAMOTORS/HDFCBANK) at three seeds:
