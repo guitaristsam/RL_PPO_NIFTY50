@@ -12,7 +12,7 @@ Calibration still in progress (seeds 43/44 running):
 | seed | RELIANCE+ITC sum | HDFCBANK val | mean_val_outperf_pp |
 |---|---|---|---|
 | 42 | +5.67pp (RELIANCE+ITC together) | -33.25pp | **-9.194** |
-| 43 | TBD | TBD | TBD |
+| 43 | -245.86pp (RELIANCE+ITC together) | -41.69pp | **-95.850** |
 | 44 | TBD | TBD | TBD |
 
 New gate = max(3.0pp, 2 × stdev of seeds 42/43/44) — TBD when all seeds complete.
