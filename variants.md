@@ -293,3 +293,302 @@ role changes (it's now subtracting from a smaller, alpha-style primary). If
 v20 wins, the val signal is already filtering high-DD policies and we may
 need less DD penalty, not different DD penalty. Run v19–v23, learn, THEN
 decide whether to layer v25 on top.
+
+---
+
+# Variants v27–v34 — single-variable forks off the v26 CHAMPION (2026-09-02, auto/research)
+
+**Champion shift.** The auto-tinker fast-proxy screen (3 stocks
+RELIANCE/TATAMOTORS/HDFCBANK, 60k steps, seed 42, objective =
+`mean_val_outperf_pp`) moved the champion from *v18 defaults (106 indicators,
+-75.6pp)* to **v26 = 22 curated indicators, every other param at v18 defaults
+(-7.9pp)**. Cutting ~80% of the features bought **+67.7pp** — the single
+biggest lever the screen has found. Under-the-noise-gate but consistently
+*positive* single-variable screens from that champion were **all
+capacity-reduction**: `n_steps 512→256` (+17.4pp), `gamma 0.99→0.95`
+(+13.4pp), `lstm_hidden 128→64` (+9pp), `ent_coef 0.01→0.05` (+3.1pp). The
+frontier direction is unambiguous: **less capacity / less overfit generalizes
+better on this data.** Everything below is a single-variable fork *from v26*
+(copy `Rl_v26.py`, change one thing), not from v18.
+
+**Why 22 indicators beat 106 (answers FRONTIER NEXT-ACTION #3).** This is
+textbook *observational overfitting* (Song et al., "Observational Overfitting
+in Reinforcement Learning", ICLR 2020, https://arxiv.org/abs/1912.02975): when
+the observation carries many features that are irrelevant or redundant to the
+optimal action, an over-parameterized policy/critic *implicitly memorizes*
+those features to fit the training trajectory, and the memorized mapping does
+not transfer. Their headline result — generalization degrades as you add
+uninformative observation dimensions even when the reward-relevant signal is
+unchanged — is exactly what v26 exploited: 101→25 obs dims, EV should now stop
+pegging at 0.99, the critic having less nuisance structure to overfit. It also
+explains the screen's val/test divergence (6 indicators → near-perfect **test**
++0.4pp but poor **val** -47pp; `n_steps=1024` → -75 val but **all 3 stocks beat
+B&H on test**, +26pp): the tiny single val window is itself a noisy, regime-
+specific selector — which is what v29/v33 below attack directly.
+
+**Ranked by expected value** (advisor-reviewed 2026-09-02): **v29 > v33 > v28
+> v34 > v27 > v31 > v30 > v32.** Fix the val selector first (v29/v33) — a
+broken oracle caps the value of every regularizer underneath it.
+
+---
+
+## Rl_v27.py — input feature-masking during training (data-space regularization)
+
+**Hypothesis.** v26 proved fewer features generalize better. Feature *masking*
+is the stochastic, per-rollout version of the same lever: randomly zero a
+fraction `p` of the observation's indicator block on each **training** step
+(never at val/test). The policy cannot lean on any single indicator, so it is
+forced onto a lower-effective-dimension representation — "stochastic feature
+reduction" — attacking observational overfitting in data-space, not parameter-
+space. This is mechanistically **distinct from the rejected weight
+regularization** (which acts on parameters and collapsed clip_fraction): it is
+input-space augmentation, the RL analogue of input dropout / cutout
+(Laskin et al., RAD, https://arxiv.org/abs/2004.14990). Masking is preferred
+over additive Gaussian noise because it is closer to the v26 win and because
+naive additive obs-noise degrades PPO gradients (Igl et al., "Selective Noise
+Injection", https://arxiv.org/abs/1910.12911) — masking a subset each step
+leaves most of the gradient path clean.
+
+**Code change.** (single variable vs v26: mask probability `p`, `0 → 0.10`)
+- Add a thin `VecEnvWrapper` `FeatureMaskWrapper(p=0.10)` applied **after**
+  `VecNormalize` in `train_ppo_model` only. In `reset()`/`step_wait()` it draws
+  a Bernoulli(1-p) mask over the indicator slots of the observation
+  (`state[1 + 2*stock_dim :]`, leave cash/price/shares untouched) and zeroes
+  the masked entries. Not applied in `ValidationCallback`'s eval env or
+  `test_ppo_model` (mask off ⇒ deterministic, full-observation inference).
+- Everything else byte-identical to v26.
+
+**How to run.** `python run_panel.py v27`
+
+**Diagnostic to look for.**
+- **Guardrail (advisor):** watch `clip_fraction` and policy `std` in the
+  training log. If clip_fraction collapses toward ~1e-3 or std grows, masking
+  is degrading gradients like the rejected reg did — back off `p` to 0.05.
+- Training EV should finish **below** v26's; val curve should decay less past
+  100k.
+- **Target stock:** INFY (late-training overfit), HDFCBANK (feature-untrainable
+  under the current set).
+
+---
+
+## Rl_v28.py — random episode-start offset (temporal data augmentation)
+
+**Hypothesis.** v26's own diagnostic flags the open question: is the residual
+overfit *feature-side* or *time-of-episode structure*? A single-stock env that
+always starts the training episode at day 0 lets the LSTM memorize one fixed
+trajectory (the same calendar path every rollout). Starting each **training**
+episode at a random day breaks that: the agent sees many market contexts and
+cannot memorize a single time-indexed path. This is standard RL data
+augmentation / a 1-D domain randomization (Lee et al., "A Simple Randomization
+Technique for Generalization in Deep RL", https://arxiv.org/abs/1910.05396;
+and the FinRL data-augmentation line, https://doi.org/10.1109/ICDMW51313.2020.00093).
+
+**Code change.** (single variable vs v26: train episode start, `fixed → random`)
+- In `IntegerTradingEnv.reset()`, **for the training env only**, set
+  `self.day = np.random.randint(0, len(self.df.index.unique()) - MIN_EPISODE_LEN)`
+  and run to end-of-series (or a fixed 252-bar window from that start).
+  Recompute the initial `state` from `self.day`. Gate with a constructor flag
+  `random_start=True` passed only when building the training env; val/test envs
+  keep `random_start=False` (deterministic day-0 start, full window).
+- Everything else byte-identical to v26. *(Optional stacked knob: also randomize
+  episode length — hold for a follow-up so this stays single-variable.)*
+
+**How to run.** `python run_panel.py v28`
+
+**Diagnostic to look for.**
+- If training EV drops and val stops decaying past 100k → temporal overfit was
+  real and this is the fix. If EV **stays** 0.99 → the residual overfit is
+  feature-side (favor v27), not temporal. Either outcome is informative.
+- **Target stock:** all; RELIANCE/TATAMOTORS (long trends the fixed-start LSTM
+  can memorize) are the clearest reads.
+
+---
+
+## Rl_v29.py — multi-subwindow validation selection (fix the broken oracle) — HIGHEST PRIORITY
+
+**Hypothesis.** The screen already *proved* the val signal is misaligned, not
+merely noisy: 6-indicators → perfect test / -47 val; `n_steps=1024` → +26 test
+/ -75 val. A single short contiguous val window is one regime draw; picking
+`argmax` of a single val return over-fits the *selector* to that regime. Score
+each checkpoint on the **mean outperformance across K disjoint val
+sub-windows** instead — a poor-man's combinatorial-purged-CV (López de Prado,
+*Advances in Financial ML*, ch. 7; https://en.wikipedia.org/wiki/Purged_cross-validation)
+— so the saved policy must generalize across several regimes, not luck into
+one. **This caps the value of every regularizer above; do it first.**
+
+**Code change.** (single variable vs v26: val score = single-window return →
+mean over K sub-windows)
+- In `ValidationCallback`, split the val slice into `K=3` contiguous, disjoint
+  sub-windows. On each eval, run the deterministic policy through each
+  sub-window, compute per-window outperformance vs its own B&H, and set
+  `val_score = mean(outperf_k)`. Save the best-`val_score` checkpoint (keep the
+  existing `min_val_trades` gate summed across windows, and the 100k warmup).
+- Everything else byte-identical to v26. *(Sharpe/return-vol-blend scoring is a
+  separate one-variable fork — see v20 for the Sharpe version; keep them
+  distinct.)*
+
+**How to run.** `python run_panel.py v29`
+
+**Diagnostic to look for.**
+- Does the selected-checkpoint **step** stabilize across seeds 42/43/44 (the
+  argmax selector currently jumps around)? Lower seed-variance of the *selected
+  step* is the primary success signal.
+- HDFCBANK and INFY (the lucky-checkpoint and late-decay casualties) are the
+  priority reads. Test-outperf variance across seeds should shrink even if the
+  mean barely moves.
+- **Target stock:** HDFCBANK, INFY.
+
+---
+
+## Rl_v30.py — coarse cross-asset regime bit (market up/down vs 200-DMA)
+
+**Hypothesis.** CLAUDE.md attributes the HDFCBANK failure to missing
+*cross-asset* context. But a raw continuous index log-return is ~beta-collinear
+with the stock's own return on daily bars — little orthogonal signal, mostly
+new overfit surface, and against the "less capacity" grain (advisor). A
+**single low-dimensional, orthogonal** regime feature threads that needle: a
+binary bit = *is the market above its 200-day moving average?* One dim of new,
+non-redundant information (broad regime), not 22nd redundant TA indicator.
+
+**Code change.** (single variable vs v26: +1 regime-bit feature)
+- Build a market proxy = the cross-sectional **mean daily close** across all
+  NIFTY50 names already in `data/` (self-contained; no external index file
+  needed). Compute its 200-day SMA. Add one observation column
+  `MKT_REGIME ∈ {0,1}` = `1[proxy_close > proxy_SMA200]`, aligned by date,
+  causal (SMA is trailing). Indicator list 22 → 23.
+- Everything else byte-identical to v26. *(Honest caveat: this ADDS a feature,
+  cutting against the champion direction; it earns its keep only if the bit is
+  genuinely orthogonal. If it regresses, that confirms cross-asset info at daily
+  resolution is subsumed by within-asset trend features.)*
+
+**How to run.** `python run_panel.py v30`
+
+**Diagnostic to look for.**
+- Split test performance by regime bit: does the policy trade *differently*
+  (lower exposure in bit=0)? If the action distribution is invariant to the
+  bit, the feature is ignored and this is dead weight.
+- **Target stock:** HDFCBANK, and high-beta names (TATAMOTORS, ADANIENT).
+
+---
+
+## Rl_v31.py — linear learning-rate decay schedule
+
+**Hypothesis.** Val peaks ~100k then decays — the classic signature of a policy
+that keeps churning into the training set late in training. A constant LR keeps
+taking full-size steps at 200k. A **linear LR decay to 0** shrinks late-training
+updates, freezing the policy near its best-generalizing point. This is distinct
+from the already-screened *constant*-LR changes (1e-4 and 1e-3 both regressed):
+a schedule, not a level. Standard PPO practice (the SB3 default examples use
+linear LR schedules for exactly this).
+
+**Code change.** (single variable vs v26: `learning_rate` const → linear schedule)
+- In `train_ppo_model`, replace `"learning_rate": 3e-4` with a callable
+  `"learning_rate": lambda progress_remaining: 3e-4 * progress_remaining`
+  (SB3 passes `progress_remaining` 1→0 over training).
+- Everything else byte-identical to v26.
+
+**How to run.** `python run_panel.py v31`
+
+**Diagnostic to look for.**
+- Val curve past 100k should flatten instead of decaying; policy `std` should
+  not collapse to near-0 (over-freezing).
+- **Target stock:** INFY (late-training overfit is its documented failure mode).
+
+---
+
+## Rl_v32.py — target_kl trust-region early-epoch stop
+
+**Hypothesis.** PPO's `target_kl` aborts the per-rollout epoch loop once the
+policy has moved more than a KL budget from the behavior policy, preventing the
+occasional over-large update that memorizes a rollout. Cheap, untried, a pure
+trust-region stabilizer. **Honest flag (advisor):** this stabilizes *training*,
+not *generalization* directly — lowest expected effect of the credible forks;
+worth it only as cheap insurance / a stacker under a real anti-overfit win.
+
+**Code change.** (single variable vs v26: `target_kl` `None → 0.02`)
+- Add `"target_kl": 0.02` to the `RecurrentPPO` kwargs.
+- Everything else byte-identical to v26.
+
+**How to run.** `python run_panel.py v32`
+
+**Diagnostic to look for.**
+- `approx_kl` in the log should cap near 0.02; effective `n_epochs` drops late
+  in training. If it never triggers, updates were already within budget → no-op.
+- **Target stock:** any; general stabilizer.
+
+---
+
+## Rl_v33.py — train/val/test purge-embargo gap
+
+**Hypothesis.** The splits are chronological and the kept indicators are
+audited-causal, but daily bars are serially correlated: rows straddling the
+train→val and val→test boundaries share overlapping indicator lookback windows
+and autocorrelated returns, so a policy can score well on the first val bars for
+reasons that don't generalize — inflating the selector. **Embargoing** a small
+gap of `E` bars after each split boundary (drop them from training/eval) is the
+López de Prado fix for exactly this leakage
+(https://en.wikipedia.org/wiki/Purged_cross-validation). Pairs with v29 — v29
+makes the val score multi-regime, v33 makes each region clean at its edges.
+
+**Code change.** (single variable vs v26: embargo gap `E`, `0 → 10` bars)
+- After the 70/15/15 chronological split, drop the first `E=10` bars of the val
+  slice and the first `E=10` bars of the test slice (equivalently, insert a
+  10-bar gap at each boundary). Longest indicator lookback here is ~30 bars
+  (`STDEV_30`); `E` between the longest lookback and ~1 bar is defensible — 10
+  is a conservative start, tune later.
+- Everything else byte-identical to v26.
+
+**How to run.** `python run_panel.py v33`
+
+**Diagnostic to look for.**
+- Val-vs-test gap should shrink if boundary leakage was inflating val. If it
+  doesn't move, leakage was already negligible (the causal-indicator audit was
+  sufficient) — a useful null result.
+- **Target stock:** all; measured at the panel level via the val/test spread.
+
+---
+
+## Rl_v34.py — gSDE exploration (generalized State-Dependent Exploration)
+
+**Hypothesis.** The action space is continuous `Box[-1,1]` (scaled to integer
+shares), so SB3's **gSDE** (`use_sde=True`) applies. gSDE replaces
+independent-per-step Gaussian action noise with smooth, *state-dependent*
+exploration noise that is consistent within a rollout; it was introduced
+specifically to improve robustness/generalization in continuous control
+(Raffin et al., "Smooth Exploration for Robotic RL",
+https://arxiv.org/abs/2005.05719). One-flag, mechanistically new to this
+project, no interaction with the reward or the val signal — a clean
+single-variable fork and a cheap high-information probe.
+
+**Code change.** (single variable vs v26: `use_sde` `False → True`)
+- Add `"use_sde": True` (and `"sde_sample_freq": 4`) to the `RecurrentPPO`
+  kwargs.
+- Everything else byte-identical to v26. *(Note: verify `sb3-contrib`'s
+  `RecurrentPPO` accepts `use_sde` in the pinned version; if not, this fork is
+  blocked and should be logged as such rather than silently dropped.)*
+
+**How to run.** `python run_panel.py v34`
+
+**Diagnostic to look for.**
+- Smoother action trajectories (fewer whipsaw trades); trade count should drop
+  vs v26. Entropy/std behavior differs from the default Gaussian head.
+- **Target stock:** INFY (over-traded 206 trades into losses — the smooth-
+  exploration case), and RELIANCE/TATAMOTORS (hold-through-trend cases).
+
+---
+
+## Note on already-designed high-value forks (do NOT duplicate)
+
+Two existing unrun designs remain high-value and should be run before inventing
+more forks — flagged here so future research sessions don't re-propose them:
+
+- **v19 (B&H-relative reward)** — *unrun, NOT rejected.* Directly targets the
+  system's actual loss (making absolute money while losing to bull-trending
+  B&H). Advisor ranks this above v30–v32. Re-baseline it onto the v26 22-
+  indicator set when run.
+- **v22 (multi-seed ensemble)** — the most literature-robust variance killer
+  (ensembling ~cuts variance 1/√N). Cheap, stackable, and likely beats the
+  small regularizers here. Re-baseline onto v26.
+
+Both predate the v26 champion; when run, fork them **from v26** (22 indicators),
+not from v18.
