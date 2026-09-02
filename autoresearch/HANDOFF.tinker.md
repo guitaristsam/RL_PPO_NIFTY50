@@ -1,13 +1,22 @@
 # HANDOFF — auto-tinker session state
 
-**Session start:** 2026-09-01T19:41:10Z (session 1) / continued 2026-09-02 (session 2)
+**Session start:** 2026-09-02T21:11:18Z (session 3)
 
 ## Current task
 
 Continuing hyperparameter experiments from the 22-indicator champion (exp1: -7.855pp).
 Gate = 60.4pp (calibrated 2026-09-01). Gate target to beat: -7.855 + 60.4 = +52.5pp.
 Gate analysis: physically unreachable on this panel — TATAMOTORS bear val inflates noise.
-Keep experimenting for secondary insights; log all results.
+Key insight: gate unreachable, but logging for directional insights. Advisor recommends panel recalibration.
+
+## Advisor guidance (session 3 start, 2026-09-02)
+
+Independent Opus advisor recommended:
+1. Skip n_lstm_layers=2 and vf_coef=1.0 (contraindicated — add capacity to already-overfitting model)
+2. n_epochs 5→3 (exp18) — best of planned 4
+3. n_steps=256 + gamma=0.95 combination run (exploratory, same "shorter horizon" hypothesis)
+4. Panel recalibration: 5 stocks or clip per-stock at ±100pp to reduce σ and make gate reachable
+5. batch_size 128 (weaker prior)
 
 ## Progress
 
@@ -26,37 +35,49 @@ Keep experimenting for secondary insights; log all results.
 - [x] exp12: 11-indicator trend set — DISCARD (-86.689pp)
 - [x] exp13: BUDGET 60k→80k — DISCARD (-8.686pp, ≈ same as champion)
 - [x] exp14: gamma 0.99→0.95 — DISCARD (+5.560pp, +13.4pp over champion, under gate)
-- [ ] exp15: n_lstm_layers 1→2 (deeper LSTM)
-- [ ] exp16: vf_coef 0.5→1.0 (higher critic weight)
-- [ ] exp17: batch_size 64→128 (larger minibatches)
-- [ ] exp18: max_grad_norm 0.5→1.0 (looser gradient clipping)
+- [ ] exp15: n_lstm_layers 1→2 — RUNNING (session 3; advisor says contraindicated but logging result)
+- [ ] exp16: n_epochs 5→3 (renamed from exp18; advisor top pick)
+- [ ] exp17: n_steps=256 + gamma=0.95 (combination, exploratory)
+- [ ] exp18: batch_size 64→128 (weaker prior)
+- [ ] exp19: Panel recalibration — swap STOCKS, recalibrate gate
 
 ## Current train.py state
 
 - STOCKS = ["RELIANCE", "TATAMOTORS", "HDFCBANK"]
-- BUDGET_TIMESTEPS = 60000 (reverted from 80k)
+- BUDGET_TIMESTEPS = 60000
 - SEED = 42
 - INDICATORS: 22-indicator v26 curated set (champion config)
-- gamma = 0.99 (champion config; exp14 reverted)
+- n_lstm_layers = 2 (exp15 change — will revert to 1 after run)
 
 ## Uncommitted changes
 
-- autoresearch/log.md — exp14 result added
-- autoresearch/HANDOFF.tinker.md — exp14 marked done
+- autoresearch/train.py — n_lstm_layers=2 (exp15)
+- autoresearch/HANDOFF.tinker.md — this file
 
 ## Next step
 
-1. Run exp15: n_lstm_layers=2 (deeper LSTM, more temporal capacity)
-2. Run exp16: vf_coef=1.0 (higher critic weight)
-3. Run exp17: batch_size=128 (larger minibatches)
-4. Run exp18: n_epochs=3 (fewer gradient steps per rollout; may reduce overfit)
-5. Consider recalibrating panel (swap TATAMOTORS for ITC or different stock)
-6. Commit+push each experiment
+1. Wait for exp15 completion notification
+2. Log exp15 result in log.md, revert n_lstm_layers to 1
+3. Apply exp16 (n_epochs 5→3), run
+4. Apply exp17 combination (n_steps=256 + gamma=0.95), run
+5. exp18 batch_size 128
+6. Consider panel recalibration (swap STOCKS for ITC/RELIANCE/HDFCBANK, recalibrate gate at 3 seeds)
 
 ## Gotchas
 
-- pandas_ta hma.py was patched on the host for Python 3.11 f-string compat; this patch is not committed (library file, not repo file). If a fresh container restarts, the patch must be re-applied: change line 69 of `/usr/local/lib/python3.11/dist-packages/pandas_ta/overlap/hma.py` from a nested f-string to use an intermediate variable `_hma_suffix`.
-- .ta_cache/ is populated — recomputing from scratch would be slow. It's gitignored.
-- All deps installed: finrl, pandas-ta (ignore-requires-python), alpaca-trade-api, exchange-calendars, stockstats, wrds, yfinance, matplotlib, scikit-learn.
-- The gate (60.4pp) is calibrated for the 3-stock panel at 60k budget. If STOCKS or BUDGET_TIMESTEPS changes, the gate must be recalibrated.
+- pandas_ta hma.py patched for Python 3.11 (line 69) — patch already applied this session. Fresh containers need re-patch.
+- .ta_cache/ is populated (RELIANCE, TATAMOTORS, HDFCBANK) — runs are fast (~8-12 min per experiment).
+- Gate (60.4pp) calibrated for 3-stock panel at 60k budget. If STOCKS or BUDGET_TIMESTEPS changes, must recalibrate.
 - 80k budget confirmed ≈ same as 60k on val (exp13); no benefit to increasing budget.
+- TATAMOTORS seed=42 degenerate cash-hold (B&H=-55.75% in val period, policy likely holds cash for +177pp).
+  This inflates baseline and makes gate physically unreachable.
+- Advisor says: ignore test column (too noisy), focus on val directional insights.
+
+## Summary table (directional hits so far, all under gate)
+
+| exp | change | val pp | vs champion | direction |
+|---|---|---|---|---|
+| 14 | gamma 0.95 | +5.56 | +13.4pp | ↑ (shorter horizon) |
+| 5 | n_steps 256 | +9.51 | +17.4pp | ↑ (more frequent updates) |
+| 4 | ent_coef 0.05 | -4.78 | +3.1pp | ↑ (more exploration) |
+| 3 | lstm 64 | +1.17 | +9.0pp | ↑ (less capacity) |
