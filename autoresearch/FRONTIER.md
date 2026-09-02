@@ -122,7 +122,8 @@ the leaderboard head from `log.md`, surfaced here for the other routines.
 
 | config | mean_val_outperf_pp | test | source commit |
 |---|---|---|---|
-| v18 defaults | _first run establishes_ | _—_ | — |
+| **22-indicator v26 curated (from AUDITED list), all other params at v18 defaults** | **-7.855** | -51.637 | 9c74acb (2026-09-01) |
+| v18 defaults (106 indicators) | -75.552 | -96.192 | — |
 
 ---
 
@@ -132,17 +133,19 @@ Any routine may add/reorder. Pick the top item you are equipped to run. When you
 finish one, strike it through and record the outcome (win → update a CHAMPION
 section; loss → note it so nobody retries it).
 
-0. (tinker, FIRST NIGHT ONLY) Calibrate the metric noise floor before trusting any
+~~0. (tinker, FIRST NIGHT ONLY) Calibrate the metric noise floor before trusting any
    win: run the unmodified baseline at SEED 42/43/44, record in log.md, set the gate
-   to max(3pp, 2σ). See program.md "Calibrate the gate". Until this is done, treat
-   all proxy "wins" as unconfirmed.
-1. (run) Validate the next unrun queued variant on the full panel: v26, v22, v20,
-   v21, v23 — but if a proxy CANDIDATE outranks these, validate that first.
-2. (tinker) Screen single-variable anti-overfit changes on the proxy; promote any
-   that clear the +3pp margin AND hold on the test column to CANDIDATES.md.
-3. (research) Explain why the current proxy/panel champion works; propose the next
-   single-variable fork *from the champion config*, not from v18, once the champion
-   is no longer v18.
+   to max(3pp, 2σ). See program.md "Calibrate the gate".~~ **DONE 2026-09-01. Gate=60.4pp.**
+1. (run) Validate the next unrun queued variant on the full panel: **v26** (priority — proxy
+   confirmed 22-indicator reduces overfit), v22, v20, v21, v23 — but if a proxy CANDIDATE
+   outranks these, validate that first.
+2. (tinker) **Gate analysis**: 60.4pp gate is unreachable with current 3-stock panel; consider
+   recalibrating with different STOCKS panel or more seeds per config. Current best is exp1
+   (22 indicators). From that baseline, n_steps=256 and LSTM=64 both showed +9-17pp, under gate.
+   Next sessions should try: (a) n_steps=256 + LSTM=64 combination IF the panel changes; (b)
+   recalibrate with a different panel (e.g. RELIANCE/ITC/HDFCBANK replacing TATAMOTORS).
+3. (research) Explain why 22 indicators beats 106: v26 thesis — fewer features, less overfit,
+   faster convergence at 60k steps. Propose next fork from the 22-indicator champion.
 
 ## CANDIDATES pending full-panel validation
 
