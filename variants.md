@@ -625,3 +625,78 @@ more forks — flagged here so future research sessions don't re-propose them:
 
 Both predate the v26 champion; when run, fork them **from v26** (22 indicators),
 not from v18.
+
+---
+
+## Rl_v35.py — explicit per-step turnover penalty (attacks over-trading)
+
+**Hypothesis.** INFY's documented failure is *over-trading into losses* (206
+test trades, whipsaw); several other stocks trade 90–160 times. The 0.25%/side
+cost model already penalizes turnover, but only **implicitly and with delay** —
+each trade's cost lands in `eq_t` and reaches the policy through the log-return
+reward one step later, a weak/late credit-assignment signal for "you trade too
+much." An **explicit, immediate** per-step turnover penalty sharpens that signal
+without changing the primary reward's shape. This is mechanistically distinct
+from every rejected reward experiment: it is not DSR (no volatility
+denominator), not weight regularization (acts on the reward, not parameters),
+not the deepening-DD penalty (penalizes trading frequency, not drawdown), and
+not B&H-relative (no benchmark term). It targets a *different* pathology
+(churn), so it can stack with them later.
+
+**Code change.** (single variable vs v26: turnover coefficient `τ`, `0 → 0.02`)
+- In `IntegerTradingEnv.step()`, after computing the primary log-return reward
+  and the existing DD penalty, subtract
+  `τ * (abs(shares_traded_this_step) / hmax)` where `shares_traded_this_step`
+  is the integer share delta the env just executed and `hmax` normalizes it to
+  ~[0,1]. Start `τ = 0.02` (small relative to the ±10 reward clip). Reward at
+  eval/test is report-only, so this affects training incentives only.
+- Everything else byte-identical to v26.
+
+**How to run.** `python run_panel.py v35`
+
+**Diagnostic to look for.**
+- **Trade count must drop** vs v26 on INFY (the primary read). If it doesn't,
+  `τ` is too small; if it drops to near-zero (degenerate cash-hold caught by the
+  `min_val_trades` / degeneracy guard), `τ` is too large — sweep `τ ∈
+  {0.01, 0.02, 0.05}` in follow-ups (each a single-variable step).
+- Watch that per-trade *quality* (win rate) doesn't fall as count drops — the
+  goal is fewer, better trades, not just fewer trades.
+- Honest flag: this partly double-counts the cost model; if it regresses on
+  low-turnover stocks (TCS, 90 trades), the implicit cost signal was already
+  sufficient there and the penalty only helps the churn cases.
+- **Target stock:** INFY (206 trades), then HDFCBANK / ADANIPORTS.
+
+---
+
+## DESIGN ONLY — v36: stack the two positive capacity-reduction levers (n_steps=256 + lstm_hidden=64)
+
+**(answers FRONTIER NEXT-ACTION #2; do NOT implement until the single-variable
+screens confirm — this is deliberately a two-variable change and must wait.)**
+
+The auto-tinker screen found `n_steps 512→256` (+17.4pp) and `lstm_hidden
+128→64` (+9pp) as the two largest *positive* single-variable moves off v26, both
+under the (unreachable-on-this-panel) 60.4pp gate. The open question the
+frontier raises: **do they stack?** Both are capacity/variance reducers acting
+on different axes — rollout length vs model width — so they are *a priori* more
+likely to be complementary than the v10/v11 reward+reg pair that offset. But the
+project's hard-won process rule is "isolate before stacking" (v10/v11
+regressed exactly because two individually-plausible changes offset each other).
+
+**Why DESIGN ONLY / the discipline.** Stacking two changes at once forfeits
+causal attribution if the result is ambiguous. Correct sequence: (1) confirm
+`n_steps=256` alone on the full panel (not just the 3-stock proxy); (2) confirm
+`lstm_hidden=64` alone on the full panel; (3) *only if both hold* build
+`v36 = v26 + n_steps=256 + lstm_hidden=64` and check for super-additivity
+(combined > max of the two) vs mere redundancy (combined ≈ the better single).
+If a run-routine has already confirmed one of the two on the full panel, the
+*other* becomes a legitimate single-variable fork from that new baseline — chase
+the frontier, don't re-fork from v26. Target reads: RELIANCE (LSTM=64 gave
++11pp in the proxy) and HDFCBANK.
+
+**Also considered and deliberately NOT proposed** (to avoid low-value padding):
+*entropy-coefficient decay schedule* — too close in spirit to v31's LR decay and
+to the already-screened constant `ent_coef=0.05`, low marginal information;
+*observation frame-stacking* (`VecFrameStack`) — the recurrent `MlpLstmPolicy`
+already supplies temporal memory, so stacked frames are largely redundant with
+the LSTM hidden state. Both are logged here as evaluated-and-deprioritized so a
+later session doesn't spend a slot rediscovering that.
