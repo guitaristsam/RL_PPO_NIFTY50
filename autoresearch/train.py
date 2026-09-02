@@ -59,7 +59,7 @@ STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]
 # machines (unlike wall-clock). 200k is production; this is a fast screen.
 BUDGET_TIMESTEPS = 60000
 
-SEED = 43
+SEED = 44
 
 # Indicator set fed to the policy. SAFETY RULE: you may only REMOVE from or
 # REORDER this audited list. NEVER add a name that is not already in it — every
