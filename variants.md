@@ -296,7 +296,17 @@ decide whether to layer v25 on top.
 
 ---
 
-# Variants v27–v34 — single-variable forks off the v26 CHAMPION (2026-09-02, auto/research)
+# Variants v27–v36 — single-variable forks off the v26 CHAMPION (2026-09-02, auto/research)
+
+> ## ⚠️ DEPRECATED BLOCK (2026-09-03) — anchored to the INVALIDATED v26 champion
+> The FRONTIER has since confirmed **v26 was a degenerate cash-hold artifact**, not
+> a champion, and restored **v18** as the production baseline (see the re-anchoring
+> note in "Variants v37–v44" below). Every proposal in this v27–v36 block is forked
+> from v26 and therefore rests on an invalidated baseline — **run routines should NOT
+> queue these**; re-derive from v18 instead. Direct supersessions on the v18 baseline:
+> **v29 (multi-window val) → v37/v38**; **v33 (purge/embargo) → v38** (embargo folded
+> into the multi-window selector). The remaining v27/v28/v30/v31/v32/v34/v35 ideas, if
+> still wanted, must be re-anchored to v18 before use. Kept on disk for auditability.
 
 **Champion shift.** The auto-tinker fast-proxy screen (3 stocks
 RELIANCE/TATAMOTORS/HDFCBANK, 60k steps, seed 42, objective =
@@ -755,6 +765,8 @@ daily single-stock TA features. Ranking:
 So the honest priority order for RUN routines: **v37 (fix the harness) → v24 pooled
 + v40/richer features (raise the ceiling) → v41/v22 ensembling (variance) →
 v38 (robust selector) → v39 (reward, only if v37 alone doesn't yield active policies).**
+v41 and v22 are both variance-killers that overlap — run **one** first (v41 SWA is
+zero extra training; v22 needs 3 seed-runs), not both in parallel.
 
 **Sources.**
 - Combinatorial Purged Cross-Validation & Deflated/Probabilistic Sharpe for model
@@ -812,8 +824,14 @@ raw-return SCORE intact) and from v20's raw Sharpe.
 **Code change (single variable: the val selection objective).**
 - `Rl_v37.py` `ValidationCallback.__init__` (~line 623): `self.best_return` →
   `self.best_score`; raise `self.min_val_trades` to **20** (frontier genuineness),
-  and add a **churn ceiling** `self.max_val_trades` (e.g. `len(val_bars)` — reject
-  a policy that trades essentially every bar, which bleeds cost). Dual gate.
+  add a **churn ceiling** `self.max_val_trades` (e.g. `len(val_bars)` — reject a
+  policy that trades essentially every bar, which bleeds cost), and a
+  **mean-exposure FLOOR** `self.min_mean_exposure = 0.15`. **Required guard
+  (advisor):** the trade-count gate counts *flips, not time in market* — a policy
+  can clear ≥20 trades by churning in-and-out at ~0 net exposure (activity without
+  conviction), which is still not a genuine active policy. Eligibility must AND-in
+  `val_mean_exp ≥ min_mean_exposure` (the callback already computes `val_mean_exp`),
+  so the gate is: `min_val_trades ≤ trades ≤ max_val_trades AND mean_exp ≥ floor`.
 - `Rl_v37.py` `_eval_on_val` (~lines 688–711): each step, record the portfolio
   value `pv_t` AND the invested fraction `exposure_t = (shares·price)/total_asset`
   from the cached `_price_slice`/`_shares_slice`. After the loop, compute the
@@ -824,6 +842,14 @@ raw-return SCORE intact) and from v20's raw Sharpe.
   val_trades ≤ max_val_trades`; compare `score > self.best_score`; print score +
   mean exposure so degeneracy is visible in the log.
 - Everything else (env, reward, warmup=100k, eval cadence) byte-identical to v18.
+
+**Attribution note (advisor).** v37 bundles three sub-changes into "the selector":
+the SCORE (exposure-adjusted IR), the trade floor (5→20), and the new ceiling +
+exposure floor. Credit any v37 win to the **SCORE**, not the gate: `min_val_trades`
+was already tested at 5 (v17) and found *inert* because that degeneracy is
+test-side — so the gate change alone cannot be what makes v37 win. The gate only
+enforces genuineness; the score is what stops a bear-window cash-hold from being
+selected in the first place.
 
 **Framing (advisor).** This is a *measurement-integrity precondition*, not an
 alpha source. The cash-hold artifact has now corrupted three things — the v26
@@ -878,11 +904,16 @@ degeneracy modes on record: the cash-hold-in-one-bear-window artifact (v26) *and
 the active-but-overfit-to-one-window collapse (HDFCBANK/INFY on test).
 
 **Code change (single variable vs v18: val window → K purged sub-windows + robust
-score).** Note: to keep this a *clean* single-variable comparison vs v37, the
-per-window score reuses raw val return (v18's metric), NOT v37's alpha — so v38
-isolates the *multi-window robustness* variable alone. (An alpha×multi-window
-combination is deliberately deferred to a DESIGN-ONLY stack, below, to avoid the
-v10/v11 two-changes-at-once trap.)
+score).** v38 is a **parallel fork of v18, not of v37** (isolate-vs-champion). The
+per-window score reuses **raw val return (v18's metric)**, so the ONLY delta vs v18
+is the multi-window robustness aggregation — that keeps v38's acceptance run a clean
+single step from the champion. (The shared v18 metric is also what later makes v42,
+the alpha×multi-window stack, a clean single step from *either* v37 or v38.) The
+alpha×multi-window combination is deferred to that DESIGN-ONLY v42 stack to avoid
+the v10/v11 two-changes-at-once trap. **Bundled knob to disclose:** the purge/embargo
+gap (`embargo_bars=5`) between sub-windows is a second small change — it is the same
+idea as the deprecated v33 embargo, intrinsic to CPCV purging and therefore
+acceptable as part of "the multi-window selector", but it is not literally one knob.
 - `Rl_v38.py` `ValidationCallback.__init__`: add `n_val_windows=3`,
   `embargo_bars=5`; precompute the K sub-slices of `val_df` by date with an
   `embargo_bars` gap dropped between adjacent windows; `self.best_score` replaces
@@ -951,6 +982,11 @@ cash-hold artifacts — and ITC as the "don't break a working active policy" con
 ---
 
 ## Rl_v40.py — market-regime conditioning feature (index trend state)
+
+> **BLOCKED — data.** Needs a NIFTY50 index CSV that the repo does not ship. Do
+> NOT queue an immediate run; first source the index file into `NIFTY50_PATH` or
+> build the equal-weight proxy (see caveat). A run routine that picks this up
+> without the data will fail on load.
 
 **Hypothesis.** Every v18 policy sees only its own stock's indicators; it has no
 idea whether the *broad market* is in a risk-on or risk-off regime. The

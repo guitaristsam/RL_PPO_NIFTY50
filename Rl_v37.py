@@ -634,6 +634,12 @@ class ValidationCallback(BaseCallback):
         # opposite degeneracy). max_val_trades defaults to the val bar count.
         self.min_val_trades = min_val_trades
         self.max_val_trades = max_val_trades
+        # v37: mean-exposure FLOOR. The trade-count gate counts flips, not time
+        # in market — a policy can clear >=20 trades by churning in-and-out at
+        # ~0 net exposure (activity without conviction), which is still not the
+        # "genuine active policy" the frontier wants. Require the mean invested
+        # fraction over the val window to clear this floor as well.
+        self.min_mean_exposure = 0.15
         # v18: skip val checkpoints before warmup_steps. v17 HDFCBANK showed the
         # @50k checkpoint was an under-trained "lucky long" policy with val_trades
         # high enough to pass the min_val_trades filter, but the policy itself
@@ -669,7 +675,8 @@ class ValidationCallback(BaseCallback):
         ceil_trades = (self.max_val_trades
                        if self.max_val_trades is not None
                        else len(self.val_df['date'].unique()))
-        eligible = self.min_val_trades <= val_trades <= ceil_trades
+        eligible = ((self.min_val_trades <= val_trades <= ceil_trades)
+                    and (val_mean_exp >= self.min_mean_exposure))
         if eligible and val_score > self.best_score:
             self.best_score = val_score
             self.best_return = val_return
@@ -684,9 +691,13 @@ class ValidationCallback(BaseCallback):
                       f"(trades={val_trades}) — NEW BEST (saved)")
         elif not eligible:
             if self.verbose:
-                why = ("< %d — cash-hold" % self.min_val_trades
-                       if val_trades < self.min_val_trades
-                       else "> %d — churn" % ceil_trades)
+                if val_trades < self.min_val_trades:
+                    why = "< %d trades — cash-hold" % self.min_val_trades
+                elif val_trades > ceil_trades:
+                    why = "> %d trades — churn" % ceil_trades
+                else:
+                    why = "mean_exp %.2f < %.2f — churn/no-conviction" % (
+                        val_mean_exp, self.min_mean_exposure)
                 print(f"  [val@{self.num_timesteps}] adj_IR={val_score:+.3f} "
                       f"ret={val_return:+.2f}% exp={val_mean_exp:.2f} "
                       f"(trades={val_trades} {why}) — degenerate, skipped")
