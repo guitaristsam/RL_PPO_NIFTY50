@@ -1164,3 +1164,65 @@ research loop currently fools itself (in-sample selection AND cross-trial
 cherry-picking). Cheap: ~1 function in `significance.py` + a trials ledger.
 Sources: Bailey & López de Prado (Deflated Sharpe / PSR);
 https://www.garp.org/hubfs/Whitepapers/a1Z1W0000054x6lUAA.pdf.
+
+---
+
+## Rl_v45.py — stock-identity conditioning for pooled training (deepens the #1 lever, v24)
+
+**Anchor.** Single-variable fork of **`Rl_v24.py` (pooled cross-stock training)**,
+NOT v18 — because the advisor pass ranked pooled training the #1 lever that can
+raise the signal ceiling (one policy over ~50 stocks ≈ 50× data, breaks the
+EV=0.99 single-path memorization). This proposal is gated: run only AFTER v24
+establishes a pooled baseline, so v45-vs-v24 stays a clean single-variable read.
+
+**Hypothesis.** v24's known weakness (advisor): pooling all stocks into ONE
+unconditioned policy can *wash out* per-stock structure — the shared net is forced
+to average over 50 heterogeneous dynamics and may learn a bland market-beta policy.
+The multi-task-RL fix is **task conditioning**: give the shared policy a per-stock
+identity signal so it can specialize its behavior per stock while still sharing the
+bulk of its parameters and the 50× data (Zhao et al., *Meta RL with Task Embedding
+and Shared Policy*, IJCAI 2019; and multi-stock shared-policy work where the policy
+"identifies overarching signals rather than memorizing a single price series"). Add
+ONE conditioning input: a small fixed **stock-descriptor vector** (e.g. a
+hash/one-hot-compressed stock id, or 2–3 slow cross-sectional stats like the
+train-window volatility decile and median-price bucket) appended to every pooled
+observation. The policy can then key its regime response on *which* stock it is
+trading without a separate model per stock.
+
+**Code change (single variable vs v24: +stock-descriptor conditioning column(s)).**
+- `Rl_v45.py` `build_pooled_data()`: for each stock, precompute a small fixed
+  descriptor (start simplest: a scalar `vol_decile ∈ [0,1]` = the train-window
+  daily-return-vol percentile across the panel; optionally a `price_bucket`). Store
+  per-stock.
+- `PooledTradingEnv.reset()`: when it samples a stock+window, inject that stock's
+  descriptor as (an) extra constant observation column(s) for the episode. Keep the
+  intersection-of-indicators observation shape otherwise identical to v24.
+- Everything else (pooled sampling, `PooledValidationCallback`, 2M timesteps, one
+  global VecNormalize) byte-identical to v24.
+
+**How to run.**
+```bash
+# after a v24 pooled baseline exists:
+python Rl_v45.py
+# smoke test (mirrors v24's):
+V45_STOCKS="RELIANCE,INFY,ITC" TOTAL_TIMESTEPS=20000 V45_WARMUP=0 \
+  V45_EVAL_FREQ=10000 python Rl_v45.py
+```
+
+**Diagnostic / caveat.**
+- Per-panel val returns vs the v24 pooled baseline. If conditioning helps, the
+  spread of per-stock behaviors should widen (the policy stops applying one
+  averaged rule) and mean panel val return should rise above v24's.
+- **Trap (flag):** a high-cardinality one-hot stock id is itself an overfit surface
+  (the policy can memorize "stock 37 → do X in this window"). Start with the LOW-dim
+  *descriptor* (vol decile / price bucket), which generalizes to unseen stocks,
+  before trying a learned per-stock embedding. If a learned embedding is used, keep
+  its dim ≤ 8 and verify held-out-stock generalization, not just in-panel fit.
+- This is *stackable* under v37's fixed selector (the pooled `PooledValidationCallback`
+  should adopt the exposure-adjusted-alpha score too) — but keep v45 single-variable
+  vs v24 for the first read.
+
+**Sources.** Zhao et al., Meta RL with Task Embedding and Shared Policy (IJCAI 2019),
+https://www.ijcai.org/proceedings/2019/0387.pdf ; multi-stock shared-policy
+generalization, https://arxiv.org/pdf/2506.04358 and
+https://www.sciencedirect.com/science/article/abs/pii/S092523122400571X .
