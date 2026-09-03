@@ -1100,3 +1100,31 @@ features can simply proxy B&H; verify the added columns change the policy's *tim
 (entry/exit vs regime) and are not just a level the critic latches onto — pair with
 v24 pooled training so the thin per-stock sample doesn't just overfit the new
 columns.
+
+---
+
+## METHODOLOGY (not a variant) — Deflated-Sharpe challenger-acceptance gate
+
+**Problem (advisor, 2026-09-03).** The project is ~40 configs deep (v6–v44 plus
+~15 proxy experiments) with NO correction for multiple testing. Under that many
+trials, a nominally-significant "win" is expected by chance — `significance.py`
+already notes it does not correct for the ~20+ versions tried and would need a
+Deflated Sharpe Ratio (Bailey & López de Prado) with the full trial record. Every
+selector/feature fix above ADDS trials, so without this gate a v37/v40/etc. "win"
+could be the same false-discovery trap that produced the v26 mirage.
+
+**Proposed gate (extend `significance.py`, not a new Rl_vNN).** Before a challenger
+is promoted on the FRONTIER, require its per-stock test Sharpe to clear the
+**Deflated Sharpe Ratio** computed with `N_trials` = the count of configs tried to
+date (track it in a `TRIALS.md` ledger), the observed cross-trial Sharpe variance,
+and the return series' skew/kurtosis. Report PSR and DSR alongside the existing
+Newey-West / block-bootstrap p-values and Benjamini-Hochberg FDR. A challenger that
+beats v18 on raw outperformance but fails DSR is flagged "not distinguishable from
+selection luck given the search depth" — exactly the label v26 earned in hindsight.
+
+**Why it matters.** This does not raise the signal ceiling; it stops the loop
+promoting mirages. Combined with v37's honest selector, it closes the two ways the
+research loop currently fools itself (in-sample selection AND cross-trial
+cherry-picking). Cheap: ~1 function in `significance.py` + a trials ledger.
+Sources: Bailey & López de Prado (Deflated Sharpe / PSR);
+https://www.garp.org/hubfs/Whitepapers/a1Z1W0000054x6lUAA.pdf.
