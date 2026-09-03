@@ -713,7 +713,7 @@ later session doesn't spend a slot rediscovering that.
 
 ---
 
-# Variants v37–v41 — single-variable forks from the v18 PRODUCTION CHAMPION
+# Variants v37–v44 — single-variable forks from the v18 PRODUCTION CHAMPION
 
 **Re-anchoring note (2026-09-03, auto-research).** The FRONTIER now records that
 **v26 (feature reduction 98→22) was a degenerate artifact**, not a win: both of
