@@ -62,6 +62,13 @@ ITC panel recalibration complete (2026-09-02). Gate = 94.2pp, baseline (seed=42)
 
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|
+| ITC-15 | 2026-09-04 | max_grad_norm 0.5→1.0 (less gradient clipping) | -54.384 | -27.562 | DISCARD (−45.2pp vs baseline) | — |
+| ITC-14 | 2026-09-04 | max_grad_norm 0.5→0.3 (more conservative gradient clipping) | -22.191 | -17.329 | DISCARD (−13.0pp vs baseline) | — |
+| ITC-13 | 2026-09-04 | enable_critic_lstm=False (simpler critic, no LSTM in value head) | -83.468 | -21.176 | DISCARD (−74.3pp vs baseline; critic LSTM essential — RELIANCE/HDFCBANK collapse) | — |
+| ITC-12 | 2026-09-04 | BUDGET_TIMESTEPS 60k→40k (earlier stopping, less overfit) | -13.021 | -7.103 | DISCARD (−3.8pp vs baseline; 60k is better than 40k) | — |
+| ITC-11 | 2026-09-04 | clip_range 0.2→0.15 (tighter trust region) | -98.357 | -18.851 | DISCARD (−89.2pp vs baseline; clip=0.2 is optimal) | — |
+| ITC-10 | 2026-09-04 | clip_range 0.2→0.3 (wider trust region) | -59.819 | -35.010 | DISCARD (−50.6pp vs baseline; RELIANCE −168pp) | — |
+| ITC-9 | 2026-09-04 | vf_coef 0.5→1.0 (more weight on critic loss) | -98.194 | -31.949 | DISCARD (−89.0pp vs baseline; catastrophic on RELIANCE/HDFCBANK) | — |
 | ITC-8 | 2026-09-04 | lstm_hidden_size/net_arch 128→32 (even smaller model) | -76.037 | -28.030 | DISCARD (−66.8pp vs baseline; too small — RELIANCE −237pp) | — |
 | ITC-7 | 2026-09-04 | lstm_hidden_size/net_arch 128→64 (smaller model, less overfit) | **+2.960** | -19.042 | DISCARD (+12.2pp vs baseline; first positive mean! RELIANCE +11pp, HDFCBANK +2pp; under gate) | — |
 | ITC-6 | 2026-09-04 | gamma 0.99→0.95 (shorter time horizon) | -4.201 | -30.686 | DISCARD (+4.99pp vs baseline; best ITC result so far; under gate) | — |
