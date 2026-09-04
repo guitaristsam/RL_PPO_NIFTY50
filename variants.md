@@ -1247,9 +1247,13 @@ a challenger only counts if it beats v18 with **genuine active policies (≥20
 trades/stock)** scored by **exposure-adjusted active return** (`active_t = pv_ret_t −
 exposure_t·bh_ret_t`). Every proposal below MUST be validated with v37's honest
 selector, not v18's raw-return selector, or it risks manufacturing another v26-style
-cash-hold mirage. Where a proposal changes the feature set, it must also pass
-`test_indicator_causality.py`-style prefix-equality (train-prefix values unchanged
-when future rows are appended).
+cash-hold mirage. **The ≥20-trades/stock active-policy gate is a pass/FAIL
+PRECONDITION on every fork below (advisor 2026-09-04), not merely part of the score:**
+any fork that mutates the feature/representation path (v46, v47, v50, v51) can
+reproduce the v26 cash-hold artifact, so a variant whose "wins" are sub-20-trade
+cash-holds is FAILED outright, not ranked. Where a proposal changes the feature set,
+it must also pass `test_indicator_causality.py`-style prefix-equality (train-prefix
+values unchanged when future rows are appended).
 
 **Advisor framing (2026-09-04): "gap-closers" vs "ceiling levers".** An independent
 advisor pass stressed that only **more information** raises the *true* signal ceiling
@@ -1312,9 +1316,10 @@ top-K).**
 - MI is univariate (ignores redundancy); if K=30 helps, a follow-up could swap MI
   for a redundancy-aware selector (mRMR / gradient-boosted-tree importance) — but
   keep the first read single-variable (MI, K=30).
-- **Distinct from v26:** v26 = arbitrary hand cut; v46 = fixed algorithm on train
-  only. If v46 wins where v26 failed, the lesson is "*which* features, not *how
-  many*."
+- **Distinct from v26 AND v27 (advisor):** v26 = arbitrary hand cut; v27 = learned
+  *binary masking* during training; v46 = a fixed MI **ranking → static top-K
+  selection** computed once on train (no learned/stochastic mask). If v46 wins where
+  v26 failed, the lesson is "*which* features, not *how many*."
 
 **Sources.** Adaptive/explainable feature selection for DRL stock trading,
 https://www.sciencedirect.com/science/article/abs/pii/S1568494625018563 ;
@@ -1397,10 +1402,11 @@ loss).**
 val-curve decay).
 
 **Diagnostic / caveat.**
-- **Distinct from the rejected L2/weight-regularization:** that shrank weight *norms*
-  (std grew, returns regressed); an aux task ADDS supervised information to *shape*
-  the representation — a different mechanism, well-supported for exactly this failure
-  mode. Still, watch `clip_fraction`/`std` for the same collapse signature the
+- **Distinct from the rejected L2/weight-regularization (advisor — say it plainly):**
+  this is **representation-shaping via an auxiliary task, NOT parameter
+  regularization**. The rejected reg shrank weight *norms* (std grew, returns
+  regressed); an aux task ADDS supervised information to *shape* the representation —
+  a different mechanism, well-supported for exactly this failure mode. Still, watch `clip_fraction`/`std` for the same collapse signature the
   rejected reg showed; if they collapse, `aux_coef` is too high — halve it once, and
   if it still collapses the lever is dead.
 - **Implementation caution (flag for run routine):** this is the most invasive draft
@@ -1516,7 +1522,10 @@ window is a different regime from train — ADANIPORTS, TATAMOTORS).
   lookahead. Audit with `test_indicator_causality.py`-style prefix equality: the
   transformed value at `t` must not change when future rows are appended. The first
   `W` bars have no full window — either warm up (skip) or expanding-window until `W`,
-  and trim consistently with v18's non-null trim.
+  and trim consistently with v18's non-null trim. (Advisor 2026-09-04 confirmed v50 is
+  leak-clean: a trailing `W`=252 percentile-rank is causal per-point, so computing it
+  on the unsplit continuous series introduces NO leak — only the first ~252 rows are
+  warmup/undefined.)
 - **Distinct from VecNormalize (advisor — pre-empt the "dup" objection):** v18's
   `VecNormalize(norm_obs)` keeps a **global running** mean/std over ALL steps seen —
   not windowed, not rank-based, so it is blind to regime shift and to outliers. v50 is
@@ -1572,14 +1581,20 @@ gate, so it will not manufacture a cash-hold).
 most on trending leaders/laggards — TATAMOTORS, ADANIENT, RELIANCE).
 
 **Diagnostic / caveat.**
-- **Data / survivorship (flag for run routine):** the cross-section is only the ~50
-  CSVs shipped, and ranks are computed on the stocks that exist on each date — a mild
-  survivorship bias but adequate as a relative signal. Log the panel membership used.
-- **Leakage (critical):** each date's rank uses only trailing per-stock values
-  (returns via `.shift`, trailing vol, trailing 200-DMA). A rank must NOT use the
-  current bar's *future*. Audit with the causality test: a stock's rank column at `t`
-  must be unchanged when future rows are appended (the OTHER stocks' future is also
-  excluded — ranks are per-date, cross-sectional, from trailing windows only).
+- **Leakage — CONSTITUENT LOOKAHEAD / survivorship (advisor: "the one to nail"):**
+  ranking against *today's* NIFTY50 membership leaks future index composition into
+  every historical rank — a stock only in the index because it survived to 2026 must
+  NOT appear in a 2015 cross-section. The panel MUST be **point-in-time**: on each
+  date, rank only the names that (a) were index constituents as of that date and
+  (b) have a real (non-ffilled-past-listing) bar that date; drop the rest from that
+  date's cross-section. If point-in-time membership is unavailable, restrict to the
+  common-listed subset and LABEL the result survivorship-biased — do not present it as
+  clean. Log the exact per-date membership used.
+- **Leakage — temporal (critical):** each date's rank uses only trailing per-stock
+  values (returns via `.shift`, trailing vol, trailing 200-DMA), never the current
+  bar's future. Audit with the causality test: a stock's rank column at `t` must be
+  unchanged when future rows are appended (each date's cross-section is independent, so
+  other stocks' future is excluded by construction — ranks are per-date, trailing-only).
 - **Distinct from a cash-hold:** relative strength is directional (which stock to be
   long), not an inaction gate; combined with the ≥20-trade gate + v37 exposure-alpha
   selector, a degenerate cash-hold cannot score. This is the intended anti-artifact
