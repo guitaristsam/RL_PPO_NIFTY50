@@ -84,9 +84,9 @@ INDICATORS = [
 # RecurrentPPO hyperparameters (copied from the v18 baseline). Fair game to tune.
 PPO_PARAMS = {
     "learning_rate": 3e-4,
-    "n_steps": 256,
+    "n_steps": 512,
     "batch_size": 64,
-    "n_epochs": 3,
+    "n_epochs": 5,
     "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_range": 0.2,

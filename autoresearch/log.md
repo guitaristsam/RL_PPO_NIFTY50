@@ -62,6 +62,12 @@ ITC panel recalibration complete (2026-09-02). Gate = 94.2pp, baseline (seed=42)
 
 | # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
 |---|---|---|---|---|---|---|
+| ITC-8 | 2026-09-04 | lstm_hidden_size/net_arch 128→32 (even smaller model) | -76.037 | -28.030 | DISCARD (−66.8pp vs baseline; too small — RELIANCE −237pp) | — |
+| ITC-7 | 2026-09-04 | lstm_hidden_size/net_arch 128→64 (smaller model, less overfit) | **+2.960** | -19.042 | DISCARD (+12.2pp vs baseline; first positive mean! RELIANCE +11pp, HDFCBANK +2pp; under gate) | — |
+| ITC-6 | 2026-09-04 | gamma 0.99→0.95 (shorter time horizon) | -4.201 | -30.686 | DISCARD (+4.99pp vs baseline; best ITC result so far; under gate) | — |
+| ITC-5 | 2026-09-04 | ent_coef 0.01→0.05 (more exploration) | -7.047 | -17.852 | DISCARD (+2.1pp vs baseline; under gate; HDFCBANK improved -33→-9.5pp) | — |
+| ITC-4 | 2026-09-04 | batch_size 64→128 (larger batch, lower gradient noise) | -106.505 | -37.548 | DISCARD (−97.3pp vs baseline; large batch catastrophic) | — |
+| ITC-3 | 2026-09-04 | n_steps 512→256 (more frequent policy updates) | -21.208 | -21.641 | DISCARD (−12.0pp vs baseline; shorter rollouts hurt on ITC panel) | — |
 | ITC-2 | 2026-09-02 | n_epochs 5→3 (fewer gradient steps) | -108.092 | -30.826 | DISCARD (−98.9pp vs baseline; n_epochs=5 is optimal) | — |
 | ITC-1 | 2026-09-02 | baseline ITC panel (SEED=42, 22 indicators, v18 hyperparams) | **-9.194** | -5.730 | **BASELINE** | — |
 
