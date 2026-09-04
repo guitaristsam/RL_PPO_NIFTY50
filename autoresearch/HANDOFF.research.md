@@ -27,6 +27,11 @@ _Last session: 2026-09-04 (UTC). Fresh cold-resume every fire — read this FIRS
   - **v51** cross-sectional relative-strength features — advisor's MISSING top pick,
     a genuine CEILING lever (adds info), buildable from the 50 in-repo CSVs.
   - **v52** DESIGN-ONLY meta-labeling (multi-component; gated behind v50/v51 reads).
+  - **v53** transfer learning: pooled-pretrain (v24) -> per-stock fine-tune. Single
+    variable vs v18 = INITIALIZATION (load pooled weights, then v18 recipe). Gated on a
+    v24 pooled checkpoint existing. Attacks the data-starvation root cause directly.
+  - **v54** multi-timeframe (weekly) context features. +K weekly-resampled columns aligned
+    to the last COMPLETED week (look-ahead bias is the documented trap here).
 - Advisor framing folded into variants.md: **"gap-closers vs ceiling levers"** — only
   more information (pooled v24/v45 or new exogenous/cross-sectional features like v51)
   raises the true ceiling; v46-v50 only close the EV=0.99->poor-test gap. Advisor EV

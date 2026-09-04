@@ -1625,3 +1625,100 @@ least one gap-closer (v50) and the ceiling lever (v51) have a trustworthy read u
 v37's honest selector; then meta-labeling is the natural way to convert a
 higher-precision primary into fewer, better trades. Source: López de Prado, *Advances
 in Financial Machine Learning*, Ch. 3 (meta-labeling).
+
+---
+
+# Variants v53–v54 — data-efficiency & multi-timeframe forks (2026-09-04, auto/research)
+
+Two more single-variable forks continuing the features/data-starvation attack. Both must
+clear the same pass/fail preconditions as v46–v51 (≥20-trade active-policy gate, v37
+exposure-adjusted selector, causality audit for any feature change).
+
+## Rl_v53.py — transfer learning: pooled pretrain → per-stock fine-tune
+
+**Anchor.** Fork of **v18** whose single variable is the policy's INITIALIZATION: instead
+of random init, warm-start each per-stock PPO run from a **pooled cross-stock pretrained
+checkpoint** (the v24 pooled model), then fine-tune on the target stock's train slice with
+the v18 recipe unchanged. Gated: needs a v24 pooled checkpoint to exist first.
+
+**Hypothesis.** v43's framing named the root cause as **data starvation** — one ~1750-bar
+train path cannot support a 128-hidden LSTM, so it memorizes (EV 0.99). The direct,
+literature-standard fix that does NOT touch capacity or per-stock compute is **transfer
+learning**: pretrain a shared policy on the whole panel (~50× data → a representation of
+"overarching market signals rather than a single price series"), then **fine-tune per
+stock** so the target stock still gets a specialized policy but starts from a
+data-rich prior rather than noise. Multi-asset RL work shows a pooled-pretrained policy
+transfers to individual assets "with refinement." This keeps v18's single-stock test
+protocol (unlike v24/v45, which also *evaluate* pooled) — the ONLY change vs v18 is the
+initial weights.
+
+**Code change (single variable vs v18: random init → load pooled-pretrained weights).**
+- Prerequisite: a saved v24 pooled model (`models_v24/pooled_ppo.zip` + its VecNormalize).
+- `Rl_v53.py` `train_ppo_model`: build the RecurrentPPO model as in v18, then
+  `model.set_parameters(pooled_checkpoint)` (matching the shared MlpLstmPolicy arch;
+  observation must be the v18 per-stock layout — so the pooled model must have been trained
+  on the SAME per-stock observation spec, i.e. the intersection-of-indicators shape). Then
+  `.learn(200k)` and the v18 ValidationCallback exactly as before.
+- Everything else (env, reward, features, selector, hyperparams, 200k budget) identical to
+  v18. Only the starting weights differ.
+
+**How to run.** `python run_panel.py v53` (after a v24 pooled checkpoint exists; the readout
+is whether a data-rich prior lowers the train-EV-vs-test gap and lifts exposure-adjusted
+alpha vs v18 random-init).
+
+**Diagnostic / caveat.**
+- **Distinct from v24/v45:** v24 trains AND evaluates one pooled policy; v45 conditions the
+  pooled policy on stock identity; v53 uses the pooled policy ONLY as an initialization for
+  a per-stock fine-tune (per-stock eval, per-stock final policy). Different mechanism.
+- **Obs-shape gotcha (flag):** the pooled pretrain and the per-stock fine-tune must share
+  the observation spec, or `set_parameters` will shape-mismatch. Pretrain v24 on the
+  per-stock intersection-of-indicators layout, or add a projection — keep the first read
+  simple by matching shapes.
+- **Fine-tune LR (keep single-variable):** use v18's `3e-4` for the first read so the only
+  variable is initialization. A lower fine-tune LR is a *separate* follow-up, not this fork.
+- Should reduce degenerate cash-holds (the prior already "knows how to be invested") — check
+  the ≥20-trade gate and the EV-vs-test gap.
+
+**Sources.** Multi-asset RL transfer with refinement (MADDQN pretrain→transfer),
+https://arxiv.org/pdf/2505.03949 ; multi-stock shared-policy learns overarching signals,
+https://arxiv.org/pdf/2506.04358 .
+
+## Rl_v54.py — multi-timeframe (weekly) context features
+
+**Hypothesis.** v18 feeds only DAILY indicators; the policy must infer longer-horizon trend
+from the daily LSTM sequence alone, which the generalization diagnostics suggest it does
+poorly. Multi-timeframe feature engineering — appending **higher-timeframe (weekly)**
+indicators alongside daily — is a standard, cheap way to surface low-frequency trend/regime
+structure the model underweights, and needs no external data (resample the same OHLCV). Add
+a small set of **weekly-resampled** columns (e.g. weekly RSI_14, weekly return, weekly
+`close/SMA20_weekly − 1`), forward-aligned to daily bars using ONLY completed weeks. Single
+variable vs v18 = +K weekly context columns (observation 101 → 101+K).
+
+**Code change (single variable vs v18: +weekly-resampled feature columns).**
+- `Rl_v54.py`: add `add_weekly_features(df)` that resamples OHLCV to weekly (`W-FRI`),
+  computes a few weekly indicators, and **merges each daily bar with the most recently
+  COMPLETED week's** weekly values (shift so the current, still-forming week is excluded —
+  a daily bar on Wednesday sees last Friday's completed weekly values, never this week's).
+  Append the weekly column names to `list_of_indicators`.
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v54` (whole panel; weekly trend context should help most
+on strongly-trending test windows — TATAMOTORS, RELIANCE, ADANIENT).
+
+**Diagnostic / caveat.**
+- **Look-ahead bias is THE trap here (flag — literature-documented):** the well-known
+  multi-timeframe bug is aligning a daily bar to the weekly bar that CONTAINS it (which
+  isn't complete until week's end). The weekly value for any day must come from the last
+  **fully closed** week (`.shift(1)` on the weekly series before the daily merge). Audit
+  with `test_indicator_causality.py`: the weekly columns at date `t` must be unchanged when
+  future rows are appended.
+- **Distinct from v51 (cross-sectional) and v47 (return representation):** v54 adds a
+  *higher-timeframe view of the SAME stock*, not a cross-asset rank or a level→return swap.
+- Honest caveat: weekly features are a **coarse-graining of existing daily data**, not truly
+  exogenous information — so expect a gap-closing/robustness effect, not a ceiling jump.
+- Degeneracy guard + ≥20-trade gate + v37 selector.
+
+**Sources.** Multi-timeframe feature engineering (price-level-agnostic),
+https://doi.org/10.3390/forecast8030040 ; multi-timeframe interaction learning in DRL
+trading (and its look-ahead-bias correction),
+https://www.sciencedirect.com/science/article/abs/pii/S0957417422013082 .
