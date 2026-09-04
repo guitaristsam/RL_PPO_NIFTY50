@@ -1722,3 +1722,231 @@ on strongly-trending test windows — TATAMOTORS, RELIANCE, ADANIENT).
 https://doi.org/10.3390/forecast8030040 ; multi-timeframe interaction learning in DRL
 trading (and its look-ahead-bias correction),
 https://www.sciencedirect.com/science/article/abs/pii/S0957417422013082 .
+
+---
+
+# Variants v55–v60 — capacity, seasonality, vol-scaled reward & exogenous-vol forks (2026-09-04, auto/research)
+
+Six single-variable forks from the **v18** production champion (v26 stays invalidated).
+v55 promotes the ONE reproducible empirical lever (capacity 128→64, positive on BOTH proxy
+panels) to a clean production fork; v56/v57 are a GATED diagnostic decomposition of it;
+v58/v60 are exogenous-information ceiling levers; v59 is a new (non-DSR) reward. All must
+clear the standing preconditions — ≥20-trade active-policy gate + v37 exposure-adjusted
+selector; any input/reward change audited by `test_indicator_causality.py`. Two independent
+advisor passes (boundary-a pre-write ranking; boundary-b pre-PR) shaped this batch; the
+advisor's changes are folded in inline (v58 trimmed, v56/v57 deferred, v60 added).
+
+**Honesty note on the capacity lever (read before v55–v57).** The RL-generalization
+literature is *mixed* on "smaller network = better generalization": several works find
+larger nets generalize BETTER and name the real culprit **observational overfitting** — the
+policy latching onto spurious features in a rich observation — fixed input-side (feature
+masking v27, causal rolling-norm v50, feature selection v46, exogenous features) rather than
+by raw shrinkage (Song et al., https://arxiv.org/pdf/1912.02975 ). We propose v55 anyway
+because on THIS project 128→64 is the only lever empirically positive on both proxy panels,
+but we frame it as a *gap-closer*, not a ceiling lift, and pair it with the observational-
+overfitting reading (see v56/v57).
+
+**Meta-risk (advisor, above any single variant).** ~15 tweaks × 2 noisy 3-stock panels is a
+garden-of-forking-paths engine; `significance.py` already reports 0/49 survive FDR with no
+correction for the ~20+ versions tried. The 128→64 "win" could be selection on noise. The
+highest-value ACTION is not another variant but hardening the accept gate: a persistent
+**trial registry** (every config ever screened, so the Deflated-Sharpe deflation uses the
+true trial count) feeding the existing Deflated-Sharpe gate (see the "METHODOLOGY —
+Deflated-Sharpe challenger-acceptance gate" note above) on the FULL panel before any lever is
+declared real. v55 is the right first spend precisely because it is the cheapest test of
+whether a proxy winner survives contact with the production panel.
+
+## Rl_v55.py — capacity reduction (lstm_hidden_size + net_arch 128→64), full features  [DRAFTED, UNRUN]
+
+**Anchor.** Fork of **v18**. Single variable: `policy_kwargs.lstm_hidden_size` 128→64 and
+`policy_kwargs.net_arch` [128]→[64]. Everything else byte-identical to v18 — all 106 features
+KEPT (the key distinction from the invalidated v26, which cut features).
+
+**Hypothesis.** The generalization diagnostics (critic EV 0.95–0.99 on train, poor test; val
+curves peak ~100k then decay) are the signature of too much capacity for ~2500 daily bars.
+Halving the LSTM width and the post-LSTM MLP head is the one anti-overfit move positive on
+BOTH proxy panels (ITC 128→64 = +12.2pp vs its baseline; TATAMOTORS = +9.0pp), while 128→32
+was catastrophic (RELIANCE −237pp) — 64 is the screened sweet spot. This is exactly the
+board's NEXT-ACTION #5: "an architectural change that improves generalization WITHOUT
+reducing features."
+
+**Code change (single variable vs v18).** `lstm_hidden_size: 128 → 64`; `net_arch: [128] →
+[64]`. **Drafted as `Rl_v55.py` (UNRUN):** 2 value edits + a banner vs v18, `ast.parse`
+clean; run via `run_panel.py` (no registration needed).
+
+**How to run.** `python run_panel.py v55` (full 10-stock panel; never run frozen files).
+
+**Diagnostic / caveat.**
+- Primary read: does train critic EV drop BELOW v18's 0.95–0.99 AND do val curves stop
+  decaying after their peak? If EV still pegs at 0.99 the overfit is time-of-episode
+  structure, not width (points to v27/v50, not more shrinkage).
+- **Distinct from v26** (features untouched) **and from v36** (v36 is a two-variable
+  n_steps=256 + lstm=64 STACK anchored to the invalidated v26 — v55 is the clean
+  single-variable v18 fork the frontier lacked).
+- Must clear the ≥20-trade gate; score with the v37 exposure-adjusted-alpha selector so a
+  degenerate cash-hold cannot win. Confidence: HIGHEST of this batch (most-supported lever);
+  main risk is it only closes the gap to a still-low ceiling.
+
+**Sources.** PPO Dash (capacity/regularization vs RL generalization),
+https://arxiv.org/abs/1907.06704 ; observational overfitting (larger nets can generalize
+better; culprit = spurious obs features), https://arxiv.org/pdf/1912.02975 .
+
+## DESIGN ONLY — v56 / v57: capacity-locus decomposition (GATED behind v55 winning the full panel)
+
+**Why gated, not two live proposals (advisor).** 128→64 won as a *joint* change of the LSTM
+core and the post-LSTM head. Decomposing it BEFORE v55 confirms on the production panel risks
+finding that neither half reproduces (an interaction effect) and burning two proposal slots
+on a non-result. So: run v55 first; **only if v55 wins the full panel**, run the matched pair.
+- **v56** — `net_arch [128]→[64]` only (LSTM stays 128). Tests whether the readout MLP is the
+  overfit locus (if so, the expensive LSTM width can stay).
+- **v57** — `lstm_hidden_size 128→64` only (head stays [128]). If halving only the LSTM (which
+  ingests the 101-dim observation each step) recovers most of v55's gain, the overfit is
+  *observational* → implicates the input-side levers (v27/v50/v46/v58/v60) as the true fix.
+- **Read as a set:** compare exposure-adjusted alpha of {v18, v55, v56, v57} on one panel.
+  v56≈v55 ⇒ head locus; v57≈v55 ⇒ LSTM/observation locus; v56≈v57≈½v55 ⇒ additive. Each is a
+  one-integer change (cheapest possible experiment) but diagnostic, not itself a challenger —
+  the production challenger is whichever of v55/v56/v57 maximizes exposure-adjusted alpha at
+  ≥20 trades. Sources: same as v55.
+
+## Rl_v58.py — calendar / seasonality context features (exogenous, look-ahead-safe)
+
+**Anchor.** Fork of **v18**. Single variable: +K deterministic calendar columns appended to
+the observation. A ceiling lever (adds information the price series does not cleanly encode).
+
+**Hypothesis.** Indian equities show documented calendar seasonality — turn-of-month and
+day-of-week effects on NIFTY — that v18's observation cannot see; the LSTM would have to
+reconstruct the calendar from bar spacing, which it cannot. Feeding the calendar directly is
+cheap and strictly causal (dates are known in advance — zero look-ahead risk). It is a
+context signal, not a risk-off gate, so it will not manufacture a cash-hold.
+
+**Code change (single variable vs v18: +calendar columns) — TRIMMED per advisor.**
+- `Rl_v58.py`: `add_calendar_features(df)` from `df['datetime']`: (i) `sin`/`cos` of
+  day-of-week (2 cols, cyclic), (ii) `turn_of_month` flag (last 1 + first 3 trading days of a
+  month = 1), (iii) `days_to_month_end` normalized to [0,1] (coarse monthly-expiry proxy).
+  K≈4. Append names to `list_of_indicators`.
+- **DROPPED per advisor:** month-of-year one-hots. ~7 train-years ⇒ ~7 samples per monthly
+  category — overfit bait, especially while v55 is simultaneously *shrinking* capacity. The
+  month effect, if real, must be earned by the higher-sample features above, not memorized
+  from 7 examples.
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v58` (seasonality is stock-agnostic → read the panel
+mean, not one stock).
+
+**Diagnostic / caveat.**
+- **Causality:** calendar values depend ONLY on the date → trivially pass
+  `test_indicator_causality.py` (invariant to appended future rows). Still run the audit.
+- Use cyclic sin/cos, NOT raw integer day-of-week — an ordinal wrap injects a false
+  discontinuity RobustScaler cannot fix.
+- Honest caveat: calendar effects are **weak and partly arbitraged**; expect a modest, broad
+  lift at best, likely strongest as a *conditioning* feature that helps other signals. Even
+  trimmed it adds ~4 dims (mild tension with the capacity finding). Cheapest true ceiling
+  lever (no external data, no cross-panel precompute) — worth one clean read, but ranked
+  BELOW v60 (VIX) as an information lever. ≥20-trade gate + v37 selector.
+
+**Sources.** Month-of-the-year effect on NIFTY50 / Bank NIFTY (January anomaly),
+https://pmc.ncbi.nlm.nih.gov/articles/PMC8742668/ ; month-of-the-year effect, Indian market,
+https://link.springer.com/article/10.1007/s10690-021-09356-2 ; calendar effects &
+weak-form efficiency (turn-of-month, day-of-week),
+https://ijmec.org.in/index.php/ijmec/article/view/144 .
+
+## Rl_v60.py — India VIX (index implied volatility) as an exogenous observation feature — TOP CEILING LEVER of this batch
+
+**Anchor.** Fork of **v18**. Single variable: append the India VIX level (and its 1-day
+change / trailing z-score) to every stock's observation. **Advisor's top missing ceiling
+lever** — genuinely exogenous, forward-looking risk information that is NOT derivable from a
+single stock's own OHLCV (unlike the price-based regime bits v30/v40/v44).
+
+**Hypothesis.** India VIX is an option-implied, forward-looking estimate of near-term NIFTY
+volatility; the literature finds it an unbiased/predominant predictor of future realized
+volatility and shows a negative, asymmetric short-term relationship with NIFTY returns (risk
+spikes cluster with drawdowns). A per-stock policy that can SEE the market's forward risk
+gauge can de-risk into vol spikes and re-engage as vol mean-reverts — information no amount of
+capacity tuning on the stock's own bars can manufacture. This raises the ceiling; it is not a
+gap-closer.
+
+**Code change (single variable vs v18: +VIX columns). GATED ON DATA.**
+- Prerequisite: a daily India VIX series (NSE publishes India VIX since ~2008–09). Add
+  `data/INDIAVIX_daily.csv` (`datetime, close`). If unavailable, this fork is BLOCKED — log
+  it to `NEEDS_HUMAN.md` (a data-sourcing request) and DO NOT fake it with a stock-derived
+  proxy (that would collapse it into v30/v40, no new information).
+- `Rl_v60.py`: `add_index_vol_features(df)` left-joins VIX on `datetime` and appends
+  (i) VIX level, (ii) 1-day VIX change, (iii) trailing z-score of VIX (causal rolling mean/std,
+  window 63). Forward-fill only past gaps (never bfill across the split). Append names to
+  `list_of_indicators`. Same value on every stock's frame for a given date.
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v60` (after `INDIAVIX_daily.csv` exists; whole panel —
+VIX is market-wide, read the panel mean).
+
+**Diagnostic / caveat.**
+- **Causality (critical):** VIX(t) is the *close* of the index-implied vol on day t — same
+  timing as the stock's own close, so aligning VIX(t) to bar t is causal, but the trailing
+  z-score MUST use rolling (never centered) stats; `.shift`-audit with
+  `test_indicator_causality.py` (VIX columns at t invariant to appended future rows).
+- **Date-alignment / holidays:** VIX and the stock share the NSE calendar, but verify no
+  extra VIX trading days leak in; inner-join on the stock's dates.
+- **Distinct from v30/v40/v44:** those derive a regime bit/vector from PRICE (the index vs its
+  200-DMA, etc.) — backward-looking and stock-adjacent. VIX is option-IMPLIED and
+  forward-looking: strictly more information. Outranks v58 as an information lever.
+- Honest caveat: adds only ~3 dims (mild capacity tension) and its edge is concentrated around
+  vol regime changes; on calm test windows expect little. Value is downside protection /
+  drawdown reduction as much as return — read max-DD and Sharpe, not just outperformance.
+  ≥20-trade gate + v37 selector.
+
+**Sources.** India VIX is an unbiased/predominant predictor of future NIFTY realized
+volatility, https://link.springer.com/article/10.1007/s40196-013-0025-4 ; forecasting power of
+India VIX, https://www.researchgate.net/publication/305990898_The_Forecasting_Power_of_the_Volatility_Index_Evidence_from_the_Indian_Stock_Market ;
+negative-asymmetric VIX–NIFTY return relationship & ML on India VIX,
+https://www.mdpi.com/1911-8074/15/12/552 .
+
+## Rl_v59.py — volatility-scaled per-step reward (floored, NOT differential-Sharpe) — LOW PRIORITY
+
+**Anchor.** Fork of **v18**. Single variable: the PRIMARY reward term. v18 uses
+`clip(log(eq_t/eq_{t-1}) * 100, -10, 10)` minus the v12 DD penalty. v59 divides the log
+return by a **floored trailing realized-vol** estimate before clipping; DD penalty preserved.
+
+**Hypothesis.** A raw per-bar return reward pays the agent the same for a +1% move in a calm
+regime and in a turbulent one, so the policy has no incentive to size/time around volatility —
+a plausible driver of the whipsaw/over-trading losses (INFY). Volatility scaling (Zhang,
+Zohren & Roberts, arXiv:1911.10107) makes the reward risk-adjusted per step (scales rewards up
+in low-vol, down in high-vol) and is shown there to let a DRL trader "follow large market
+trends without changing positions and scale down through consolidation" — the trend-following
+behavior v18 lacks.
+
+**Materially different from the REJECTED DSR (the whole point).** v10's DSR used the
+Moody–Saffell recursive differential Sharpe with a `(B − A²)^(3/2)` denominator that detonates
+in low-vol windows (VL→85, clip_fraction→1e-4). v59 has NO such term:
+`reward = clip( (log(eq_t/eq_{t-1}) / max(σ_t, σ_floor)) * k, -10, 10 )`, where `σ_t` is a
+simple trailing stdev of the last N(=20) equity log-returns and `σ_floor` HARD-BOUNDS the
+denominator. No ^1.5 power, no recursive B−A² — bounded by construction. This is standard
+vol-target scaling, not the differential Sharpe.
+
+**Code change (single variable vs v18: primary reward only).**
+- `IntegerTradingEnv`: keep a rolling buffer of the last N equity log-returns; replace
+  `primary = clip(logret*100,…)` with
+  `primary = clip(logret / max(rolling_std(buf), σ_floor) * k, -10, 10)`. Calibrate `k` so
+  mean |primary| ≈ v18's on ONE stock (keep it a *shape* change, not a *scale* change). Reset
+  the buffer in `reset()`. v12 DD penalty still subtracted, unchanged.
+
+**How to run.**
+`python -c "from Rl_v59 import process_stock, NIFTY50_PATH; import os; process_stock(os.path.join(NIFTY50_PATH,'INFY_daily.csv'))"`
+then `python run_panel.py v59`. Priority: INFY (over-trading), TATAMOTORS/RELIANCE (trend).
+
+**Diagnostic / caveat (advisor flags).**
+- **Not truly clean single-variable — it STACKS on v18's log-return+DD reward** (re-weights
+  the existing primary rather than replacing the whole reward). Treat the `k`-calibration as
+  part of the one change, not a second knob.
+- **It is a GAP lever, not a ceiling lever** — it re-weights credit assignment, adds no new
+  information → bounded upside under this batch's own framing. Hence LOW PRIORITY behind the
+  information levers (v60, v58) and the confident gap lever (v55).
+- **DSR-failure watch:** monitor `value_loss` / `clip_fraction`; if VL blows up or
+  clip_fraction collapses toward 1e-3, `σ_floor` is too small — raise it. `σ_t` MUST be causal
+  trailing (never centered).
+- Honest flag: reward-shaping has a poor track record here (v10/v11 lost). It earns a slot
+  ONLY because the mechanism is provably distinct from DSR and is the literature-standard
+  trend-following reward. If it collapses like v10, discard and do NOT retry vol-based rewards.
+
+**Sources.** Zhang, Zohren & Roberts, "Deep Reinforcement Learning for Trading" (volatility
+scaling in the reward for trend-following), https://arxiv.org/abs/1911.10107 ;
+https://arxiv.org/pdf/1911.10107 .
