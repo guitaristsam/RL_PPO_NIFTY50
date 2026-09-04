@@ -1,68 +1,76 @@
 # HANDOFF — auto-research (private to this routine)
 
-_Last session: 2026-09-03 (UTC). Fresh cold-resume every fire — read this FIRST._
+_Last session: 2026-09-04 (UTC). Fresh cold-resume every fire — read this FIRST._
 
-## State at end of 2026-09-03 session
+## State at end of 2026-09-04 session
 
-- **RE-ANCHORED to v18.** The FRONTIER now records that **v26 (feature reduction)
-  is a DEGENERATE CASH-HOLD ARTIFACT**, not a win (both its B&H-beats were 0/5-trade
-  cash-holds; ITC regressed +40pp→−61pp). The auto-tinker proxy champion is the same
-  TATAMOTORS cash-hold artifact. **v18 is the restored production champion for
-  building.** My PREVIOUS session's v27–v34 forks were anchored to the now-invalidated
-  v26 — do NOT build further on them; anchor to v18.
-- **Frontier hard requirement:** the next challenger must beat v18 with GENUINE
-  ACTIVE policies (≥20 trades/stock). A bear-window cash-hold does not count.
-- **Two advisor passes this session** established the key reframe:
-  - **Blocker ranking: features > selection > reward.** significance.py (0/49 FDR)
-    and baselines.py (PPO ≈ coin-flip vs SMA) say the SIGNAL is the ceiling. The only
-    two levers that raise it: **v24 pooled cross-stock training** (~50× data, fixes
-    EV=0.99 memorization) and **exogenous regime/cross-asset features** (v40/v44).
-  - The selector fix is a **measurement-integrity PRECONDITION**, not an alpha source.
-  - **Critical:** naive alpha/IR-over-B&H STILL rewards a bear-window cash-hold (high
-    IR: positive low-vol active return vs a falling benchmark). The correct score is
-    **exposure-adjusted active return** `active_t = pv_ret_t − exposure_t·bh_ret_t`
-    (exposure-matched Jensen's alpha) — a cash-hold has exposure≈0 → score≈0.
+- **Champion for building = v18** (unchanged). v26 remains an INVALIDATED cash-hold
+  artifact; do NOT anchor to it. Frontier hard rule stands: a challenger counts only
+  if it beats v18 with GENUINE ACTIVE policies (>=20 trades/stock), scored by
+  exposure-adjusted active return (v37's selector).
+- **No champion movement on the board this cycle** — run-routines had not yet
+  validated v37/v24 as of this session (FRONTIER CHAMPION rows still v18). So I forked
+  from v18, not from an un-moved champion. Next session: re-check FRONTIER; if a run
+  validated v37 or v24, DEEPEN the winner instead of adding more v18 forks.
 
-## What I shipped this session (on auto/research, pushed)
+## What I shipped this session (on auto/research, pushed: commit 19e2b88)
 
-- variants.md: added **"Variants v37–v44"** — 7 v18-anchored single-variable proposals
-  + advisor blocker-ranking + a Deflated-Sharpe methodology note. Sources cited (URLs).
-  - **v37** (HIGHEST / prerequisite): exposure-adjusted-alpha val selector + dual
-    activity gate. **DRAFTED as Rl_v37.py (UNRUN, parses clean).**
-  - v38 multi-window CPCV-style robust selector (mean−std over K purged sub-windows).
-  - v39 inaction/missed-opportunity reward penalty (deprioritized vs selector).
-  - v40 market-regime feature (index vs 200-DMA); v44 richer exogenous vector (DESIGN).
-  - v41 SWA over top-K checkpoints (action-ensemble fallback).
-  - v43 stationary block-bootstrap path augmentation (attacks data starvation).
-  - v42 DESIGN-ONLY stack (alpha × multi-window), gated behind v37+v38 confirmation.
-  - Methodology: Deflated-Sharpe challenger-acceptance gate (extend significance.py).
-- Rl_v37.py: UNRUN draft. ONLY change vs v18 = ValidationCallback score (lines
-  ~604–711) + restore print + callback construction min_val_trades=20. Env/reward/
-  features/hyperparams identical. Verified `ast.parse` OK; no frozen file touched.
-- PR #4 (draft, auto/research→main) title+body updated to the v18 re-anchoring.
+- variants.md: added **"Variants v46–v50"** block + **v51** (separate ceiling-lever
+  block) + **v52** (DESIGN-ONLY). All single-variable vs v18, all advisor-reviewed
+  (two advisor passes: boundary-a pre-write ranking, boundary-b pre-PR — see PR).
+  - **v46** train-only MI feature selection (principled vs v26's arbitrary cut).
+  - **v47** stationary return-based feature representation (level->return).
+  - **v48** auxiliary next-return prediction head (SPR-style rep. regularizer).
+  - **v49** momentum BC warm-start (anti-degeneracy; advisor DEMOTED to lowest).
+  - **v50** causal rolling RANK-normalization (advisor #1 gap-closer).
+    **DRAFTED as Rl_v50.py — UNRUN, parses+compiles clean (70 ins/4 del vs v18).**
+  - **v51** cross-sectional relative-strength features — advisor's MISSING top pick,
+    a genuine CEILING lever (adds info), buildable from the 50 in-repo CSVs.
+  - **v52** DESIGN-ONLY meta-labeling (multi-component; gated behind v50/v51 reads).
+- Advisor framing folded into variants.md: **"gap-closers vs ceiling levers"** — only
+  more information (pooled v24/v45 or new exogenous/cross-sectional features like v51)
+  raises the true ceiling; v46-v50 only close the EV=0.99->poor-test gap. Advisor EV
+  rank: **v50 > v47 > v46 > v48 > v49**, with **v51 above v46/v48**.
+- Rl_v50.py: single change = observation scaling. Static train-fit RobustScaler ->
+  causal rolling trailing percentile-RANK (W=252) applied on the CONTINUOUS frame in
+  process_stock BEFORE the split (no per-split reset), per-split calls set
+  skip_scaling=True. Helper `causal_rolling_rank_normalize()` added before
+  prepare_data_for_finrl. Env/reward/features/hyperparams byte-identical to v18.
 
 ## Immediate next steps for the NEXT research session
 
-1. Read FRONTIER first. If a run-routine validated v37 or v24, read its READOUT and
-   DEEPEN the winner. If v37 works, the next fork is **v42** (alpha × multi-window)
-   or layering a feature lever (v40) UNDER the fixed selector.
-2. Highest-value unwritten drafts to consider: **v40** (needs an index CSV or an
-   equal-weight proxy built from the 50 stock closes — check data/ for an index
-   file first) and **v43** (block-bootstrap — a `make_block_bootstrap_train` helper).
-3. The signal ceiling is the real problem. Push run-routines toward **v24 pooled**
-   + **exogenous features** over any more reward/hyperparameter forks.
-4. Do NOT re-propose the rejected list (DSR, weight-reg, deepening-DD, 1M steps,
-   min-val-trades=5, B&H-relative v19). v19/v22/v24 are UNRUN not rejected.
+1. Read FRONTIER first. If a run validated v37/v24/any challenger, DEEPEN the winner.
+2. Highest-value UNWRITTEN drafts to consider next (in priority order):
+   - **Rl_v51.py** (cross-sectional relative-strength) — the ceiling lever; needs a
+     one-time cross-panel precompute of per-date ranks from the 50 CSVs. Highest EV.
+   - **Rl_v47.py** (stationary return features) — contained: add_return_features()
+     helper + swap list_of_indicators to ~15-20 stationary names.
+   - **Rl_v46.py** (MI selection) — sklearn.feature_selection.mutual_info_regression
+     on train_df ONLY; drop last train row's label; freeze set, confirm on val.
+3. **Rl_v50.py is UNRUN and could NOT be pandas-smoke-tested here** (this research env
+   has no pandas/torch/sb3). Causality holds BY CONSTRUCTION (pandas rolling is
+   trailing/right-aligned; _rank_last compares current only to w[:-1]). A run-routine
+   should still pandas-smoke-test the helper (causality drift ~0, no NaN, output in
+   [-1,1]) before a full panel run, and confirm rolling.apply speed is acceptable
+   (~98 cols x 2500 rows x W=253 python-callback rolling is slow; may need a
+   vectorized rank if too slow — note for whoever runs it).
+4. The signal ceiling is still THE problem. Keep pushing run-routines toward v24/v45
+   POOLED + exogenous/cross-sectional features (v51) over more reward/hyperparam forks.
+
+## Do NOT re-propose (rejected list, CLAUDE.md)
+DSR reward, weight/L2 regularization, deepening-only DD, 1M timesteps,
+min-val-trades=5, B&H-relative reward (v19 is UNRUN not rejected). v49's BC warm-start
+must stay a warm-START only (no persistent KL anchor — that = the rejected reg class).
 
 ## Gotchas
-
-- Champion config for building = **v18** (NOT v26). v18 env/reward at Rl_v18.py
-  lines ~404–530; ValidationCallback ~586–711; restore ~819–841; callback
-  construction ~794–804.
-- v18 env is single-stock (stock_dim=1): `state[0]`=cash, `state[1]`=price,
-  `state[1+sd]`=shares. v37's exposure snapshot relies on this.
-- run_panel.py does `importlib.import_module(f"Rl_{ver}")` — `python run_panel.py v37`
-  runs with no registration.
-- Never edit frozen files (v6–v26 baselines, and now v27–v36 drafts are effectively
-  frozen too — they're on the branch). Only ADD new vNN.
+- v18 anchors: prepare_data_for_finrl ~line 286 (scaling block ~336-353); process_stock
+  ~line 1224 (split wiring ~1296-1316); ValidationCallback ~586; policy_kwargs ~772.
+- run_panel.py does importlib.import_module(f"Rl_{ver}") — `python run_panel.py v50`
+  runs it with no registration needed.
+- test_indicator_audit.py uses an EXPLICIT version list (v8-v24,v26); adding v50 does
+  NOT break it, and v50 doesn't change list_of_indicators anyway. v47/v51 DO change
+  the feature set -> they must pass test_indicator_causality.py and NOT introduce a
+  known-leakage name (audit test).
+- Never edit frozen files (v6-v26 baselines; v27-v45 drafts effectively frozen).
+  Only ADD new vNN.
 - Lease: autoresearch/.lease-research — DELETE on clean end, commit+push.
