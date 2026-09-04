@@ -1226,3 +1226,387 @@ V45_STOCKS="RELIANCE,INFY,ITC" TOTAL_TIMESTEPS=20000 V45_WARMUP=0 \
 https://www.ijcai.org/proceedings/2019/0387.pdf ; multi-stock shared-policy
 generalization, https://arxiv.org/pdf/2506.04358 and
 https://www.sciencedirect.com/science/article/abs/pii/S092523122400571X .
+
+---
+
+# Variants v46–v50 — single-variable forks from the v18 PRODUCTION CHAMPION (2026-09-04, auto/research)
+
+**Anchor & framing.** All five fork the **v18 production champion** (v26 is an
+invalidated cash-hold artifact — do NOT anchor to it). They target the project's
+established #1 blocker: **the signal is the ceiling** (`significance.py`: 0/49 clear
+Benjamini-Hochberg FDR; `baselines.py`: PPO ≈ coin-flip vs a dumb SMA rule; training
+critic EV pegged 0.95–0.99 while test is poor → textbook generalization gap; val
+curves peak ~100k then decay). Prior advisor blocker-ranking: **features >
+selection > reward**. These five are therefore weighted toward **feature /
+representation** levers (v46, v47, v48, v50) plus one **initialization** lever (v49),
+because reward-side and capacity-side levers are largely exhausted (see the rejected
+list in CLAUDE.md). Each is ONE variable vs v18.
+
+**Cross-cutting requirement (applies to all five).** The FRONTIER's hard rule stands:
+a challenger only counts if it beats v18 with **genuine active policies (≥20
+trades/stock)** scored by **exposure-adjusted active return** (`active_t = pv_ret_t −
+exposure_t·bh_ret_t`). Every proposal below MUST be validated with v37's honest
+selector, not v18's raw-return selector, or it risks manufacturing another v26-style
+cash-hold mirage. Where a proposal changes the feature set, it must also pass
+`test_indicator_causality.py`-style prefix-equality (train-prefix values unchanged
+when future rows are appended).
+
+**Advisor framing (2026-09-04): "gap-closers" vs "ceiling levers".** An independent
+advisor pass stressed that only **more information** raises the *true* signal ceiling
+— pooled data (v24/v45) or genuinely new **exogenous / cross-sectional** features.
+Everything that reshapes the *same* indicator set (normalization, representation,
+selection, aux losses, warm-starts) is a **generalization-gap closer**: it can
+convert existing signal into more robust test performance (attacking the EV=0.99→
+poor-test gap) but cannot manufacture alpha the features don't contain. Read the five
+below with that expectation. The advisor's EV ranking for gap-closing on THIS system:
+**v50 (rolling rank/z) > v47 (stationary representation) > v46 (train-only selection)
+> v48 (aux head) > v49 (BC warm-start)**; a proposed cost-domain-randomization idea
+was **dropped** (unrelated to the gap and actively cash-hold-prone). Crucially, the
+advisor flagged a **ceiling lever we were missing — cross-sectional relative-strength
+features (added below as v51)** — ranked above v46/v48 because it adds real
+information rather than only closing the gap. Run order suggestion: **v50 first**
+(cheapest, safest, causal by construction), then **v51** (the ceiling lever, buildable
+from data already in the repo), then v47.
+
+## Rl_v46.py — data-driven (train-only) feature selection by predictive importance
+
+**Hypothesis.** v26 cut 98→22 indicators by *hand* and produced a degenerate
+cash-hold — but that experiment confounded TWO things: fewer features AND an
+*arbitrary* choice of which. The features-are-the-ceiling diagnosis still says the
+observation is bloated (98 mostly-redundant TA columns feeding a 128-hidden LSTM on
+one ~1750-bar train path is a memorization engine). The untried, principled lever is
+**data-driven selection**: rank each causal indicator by its **train-only**
+predictive relationship to next-day return and keep the top-K, so the cut is earned
+by signal, not guessed. This is the standard anti-overfit feature-selection move in
+DRL-for-trading (adaptive/importance-based selection; conditional-mutual-information
+selection). Single variable vs v18 = **which features**, chosen by a fixed algorithm
+rather than by hand.
+
+**Code change (single variable vs v18: `list_of_indicators` → algorithm-selected
+top-K).**
+- `Rl_v46.py` `process_stock` (after the train/val/test split, using **`train_df`
+  ONLY**): compute, for each column in `list_of_indicators`, a scalar importance =
+  mutual information (`sklearn.feature_selection.mutual_info_regression`) between the
+  scaled indicator at `t` and the next-day log-return `log(close_{t+1}/close_t)`
+  restricted to the train slice. Keep the top `K=30` names; intersect with the
+  columns actually present. Use that reduced list for env construction (train/val/
+  test all use the SAME train-derived list).
+- Env, reward, selector-metric-default, hyperparams unchanged. `K` is the only new
+  constant (start 30; it is the sweep knob, not part of the first single-variable
+  read — first read is fixed K=30 vs v18's 98).
+
+**How to run.** `python run_panel.py v46` (whole panel; the readout is whether a
+*principled* cut beats both v18-98-features AND avoids v26's degeneracy).
+
+**Diagnostic / caveat.**
+- **Leakage (critical, advisor):** the MI ranking MUST be computed on the train slice
+  only; ranking on the full series leaks the val/test relationship into feature
+  choice. Compute after the chronological split, from `train_df` alone. Also **drop
+  the last train row's next-day-return label** so the label cannot peek into the first
+  val bar. Then **freeze** the selected set and confirm the improvement on val —
+  selecting features against the train label and reading improvement on that same
+  period is circular and will flatter itself. Log the selected names per stock.
+- **Degeneracy guard:** score with v37's exposure-adjusted-alpha selector and the
+  ≥20-trade gate. If v46's "wins" are again low-trade cash-holds, the lever is dead
+  (same failure class as v26) — report and stop, do not sweep K.
+- MI is univariate (ignores redundancy); if K=30 helps, a follow-up could swap MI
+  for a redundancy-aware selector (mRMR / gradient-boosted-tree importance) — but
+  keep the first read single-variable (MI, K=30).
+- **Distinct from v26:** v26 = arbitrary hand cut; v46 = fixed algorithm on train
+  only. If v46 wins where v26 failed, the lesson is "*which* features, not *how
+  many*."
+
+**Sources.** Adaptive/explainable feature selection for DRL stock trading,
+https://www.sciencedirect.com/science/article/abs/pii/S1568494625018563 ;
+conditional-mutual-information dynamic feature selection,
+https://arxiv.org/pdf/2301.00557 .
+
+## Rl_v47.py — stationary return-based feature representation
+
+**Hypothesis.** Most of v18's 98 indicators are **price-LEVEL** quantities (moving
+averages, Bollinger bands, price-scaled oscillators). Levels are non-stationary: the
+train slice lives at one price regime and the test slice at another, so a critic that
+fits train levels (EV 0.99) cannot transfer — a large part of the generalization gap
+is **input non-stationarity**, not just capacity. The equity-ML literature is
+near-unanimous that models should consume **stationary, scale-free** inputs
+(multi-horizon returns, ratios, bounded oscillators), normalized causally. Replace
+the level-based block with a compact **return/ratio** representation: multi-horizon
+log-returns (1/5/10/21-day), ATR-as-fraction-of-price, distance-from-MA as a *ratio*
+(`close/SMA − 1`), plus the already-bounded oscillators (RSI, MFI, Stoch). Single
+variable vs v18 = **feature representation** (level → stationary-return), holding the
+selector/reward/env fixed.
+
+**Code change (single variable vs v18: `list_of_indicators` replaced by a
+stationary set; add a small `add_return_features(df)` helper).**
+- `Rl_v47.py`: add `add_return_features(df)` computing causal, trailing columns:
+  `LOGRET_1/5/10/21` (`log(close/close.shift(h))`), `ATR_PCT = ATR_14/close`,
+  `SMA_RATIO_{20,50} = close/SMA_h − 1`, `MOM_PCT_{10,21}` as returns; keep the
+  bounded oscillators already in the list (RSI_14, MFI_14, STOCHk/d). Set
+  `list_of_indicators` to exactly this stationary set (~15–20 names).
+- All are trailing/causal (`.shift(h)` uses past only). Env/reward/selector/
+  hyperparams identical to v18.
+
+**How to run.** `python run_panel.py v47` (whole panel; the readout is whether
+stationary inputs shrink the train-EV-vs-test gap).
+
+**Diagnostic / caveat.**
+- **Distinct from v26 and v46:** v26/v46 keep the SAME level-based TA (just fewer);
+  v47 changes the *kind* of feature (level → return). This is the representation
+  lever, orthogonal to count.
+- Training EV should fall below 0.95–0.99 (levels no longer memorizable) and val
+  curves should decay less after 100k if non-stationarity was the culprit.
+- **Causality:** `.shift(h)` and trailing windows only; audit with the causality
+  test. No center-aligned smoothing (that was the v6/v7 leak class).
+- **The word "normalized" is the trap (advisor):** any z-score/vol-scaling statistic
+  applied to these return features must be **fit on the train slice only** and applied
+  forward, OR made **trailing/rolling** (a subtler cousin of the bfill bug already
+  paid for — fitting on the full series leaks the test distribution backward). Safest
+  is to converge the normalization toward v50's causal rolling mechanism so no fitted
+  statistic crosses the split boundary. The raw log-returns/ratios themselves are
+  already scale-free and can be fed with only v18's existing scaler.
+- Degeneracy guard + ≥20-trade gate + v37 selector, as above.
+
+**Sources.** Stationary-feature deep learning for price prediction,
+https://arxiv.org/pdf/1810.09965 ; cross-sectional/return-based normalization is the
+final step in top equity-ML features, https://arxiv.org/pdf/1910.01491 .
+
+## Rl_v48.py — auxiliary next-return prediction head (self-supervised representation regularizer)
+
+**Hypothesis.** The generalization gap is a **representation** problem: the LSTM
+encoder is free to shape its latent space purely to fit training P&L (EV 0.99),
+learning idiosyncratic features that don't transfer. Auxiliary-task /
+self-predictive-representation work (SPR; "Loss is its own Reward") shows that adding
+a **self-supervised prediction loss** that shares the encoder pulls the
+representation toward *generic predictive structure*, improving sample efficiency and
+out-of-sample generalization at ~zero inference cost — precisely the data-starved,
+overfit regime here. Add ONE auxiliary head off the shared LSTM features that
+predicts the **next-day log-return**, trained jointly with a small coefficient
+`aux_coef` alongside the PPO loss. Single variable vs v18 = **+auxiliary loss**.
+
+**Code change (single variable vs v18: subclass the policy to add an aux head +
+loss).**
+- `Rl_v48.py`: subclass `RecurrentActorCriticPolicy` (or wrap PPO's `train()`) to add
+  a linear `aux_head(features) → r̂_{t+1}` and add `aux_coef * MSE(r̂_{t+1},
+  logret_{t+1})` to the total loss. The regression target is the **realized next-day
+  log-return**, available in the rollout buffer as `close_{t+1}/close_t` (causal — it
+  is the *label* for state `t`, not an input, so no lookahead in the observation).
+- `aux_coef = 0.1` (start); everything else — env, reward, features, selector,
+  hyperparams — identical to v18.
+
+**How to run.** `python run_panel.py v48` (whole panel; readout is EV-vs-test gap and
+val-curve decay).
+
+**Diagnostic / caveat.**
+- **Distinct from the rejected L2/weight-regularization:** that shrank weight *norms*
+  (std grew, returns regressed); an aux task ADDS supervised information to *shape*
+  the representation — a different mechanism, well-supported for exactly this failure
+  mode. Still, watch `clip_fraction`/`std` for the same collapse signature the
+  rejected reg showed; if they collapse, `aux_coef` is too high — halve it once, and
+  if it still collapses the lever is dead.
+- **Implementation caution (flag for run routine):** this is the most invasive draft
+  (custom policy subclass in sb3-contrib RecurrentPPO). The target must be read from
+  the buffer as the label for the CURRENT step (`r_{t+1}` is realized after acting at
+  `t`) and must NEVER enter the observation. Verify shapes on the 20k smoke run
+  before a full panel.
+- **EV caveat (advisor):** predicting next-day return *is itself* the ceiling problem,
+  so the aux target is near-unlearnable — the head may inject mostly noise gradient
+  rather than a useful shared representation. Worth **one** run; do NOT over-invest or
+  sweep `aux_coef` widely. If the multi-step self-predictive-latent target (SPR-style:
+  predict the next *latent state*, not the raw return) is easy to bolt on, it is the
+  stronger version and sidesteps the "return is unpredictable" objection.
+- Degeneracy guard + ≥20-trade gate + v37 selector.
+
+**Sources.** Data-Efficient RL with Self-Predictive Representations (SPR),
+https://arxiv.org/pdf/2007.05929 ; Loss is its own Reward: Self-Supervision for RL,
+https://arxiv.org/pdf/1612.07307 .
+
+## Rl_v49.py — momentum behavior-cloning warm-start
+
+**Hypothesis.** Two v18 pathologies share a root cause — a poor initialization.
+(a) Degenerate cash-hold checkpoints (HDFCBANK) arise when the random-init policy
+never discovers the "be invested" region early. (b) v18 policies "make money but lose
+to bull-trending B&H" because they never acquire a trend-following prior. Both are
+fixed by **warm-starting** the policy from a simple, causal trend rule via behavior
+cloning (BC), then letting PPO fine-tune — the standard hybrid imitation→RL recipe
+for sparse/long-horizon control and sample efficiency. Single variable vs v18 =
+**policy weights are BC-pretrained** on a trend rule before PPO's 200k steps (PPO
+budget, env, reward all unchanged).
+
+**Code change (single variable vs v18: add a BC pretrain stage before `.learn()`).**
+- `Rl_v49.py` in `train_ppo_model`, BEFORE `.learn()`: generate expert actions from a
+  **causal SMA rule** on the train slice (target exposure = full-in when
+  `close > SMA_50` else flat; map to the env's action via the same share logic v18
+  uses), roll it through the train env to collect `(obs, expert_action)` pairs, and
+  run a few hundred supervised gradient steps minimizing
+  `MSE(policy_action(obs), expert_action)` on the actor (BC). Then call `.learn()` as
+  in v18.
+- The SMA rule is causal (SMA_50 is trailing). Env/reward/features/selector/
+  hyperparams identical; only the initial weights differ.
+
+**How to run.** `python run_panel.py v49` (whole panel; target HDFCBANK — the
+degenerate-init failure — and bull-window stocks that beat v18's absolute return but
+lose to B&H).
+
+**Diagnostic / caveat.**
+- Success = fewer degenerate/cash-hold checkpoints AND higher exposure-adjusted alpha
+  vs v18, with ≥20 trades. If BC merely reproduces the SMA baseline (which
+  `baselines.py` shows PPO already ~ties), the warm-start didn't help PPO escape —
+  report as neutral.
+- **Keep it a warm-START, not a constraint:** do NOT add a persistent KL-to-prior
+  penalty in the first read — a standing KL anchor is functionally the rejected
+  "regularization toward a fixed policy" and risks freezing the SMA rule in. BC
+  affects only the initial weights; PPO is then free. (A mild, decaying KL anchor is
+  a possible v49-followup ONLY if pure warm-start washes out too fast.)
+- **Leakage:** the BC target uses trailing SMA only; assert no future bar enters the
+  expert action.
+- **Priority (advisor, honest):** this is the LOWEST-ranked of the five — it targets
+  *optimization / anti-degeneracy*, not the ceiling or the gap, and its SMA prior only
+  coin-flips vs PPO in `baselines.py`, so it cannot lift the ceiling above that rule.
+  It also brushes the single-variable discipline (BC pretrain is one mechanism; keep
+  any KL anchor OUT of the first read as noted). Run it only when the objective is
+  explicitly "guarantee an active ≥20-trade policy / kill the HDFCBANK cash-hold,"
+  not when the objective is alpha. Deprioritize behind v50/v51/v47.
+
+**Sources.** Hybrid imitation→RL (warm-start then fine-tune),
+https://arxiv.org/pdf/2412.07057 ; BC-augmented sample-efficient imitation,
+https://arxiv.org/pdf/2001.07798 .
+
+## Rl_v50.py — causal rolling normalization of observations (adaptive, bounded inputs)
+
+**Hypothesis.** v18 fits a **single static** `RobustScaler` on the train slice and
+applies it forever. When the test slice drifts to a new regime, those fixed
+median/IQR constants are stale, so inputs land off-distribution — a direct
+contributor to the train→test gap that is separate from *which* features are used
+(v46/v47). The equity-ML fix is **causal rolling normalization**: normalize each
+feature by its own *trailing-window* statistics (e.g. rolling z over the past ~252
+bars, or trailing percentile rank), so inputs stay bounded and regime-adaptive
+across the whole timeline. Single variable vs v18 = **the scaling scheme** (static
+train-fit RobustScaler → causal rolling z/rank), features and everything else held
+fixed. **Advisor ranks this the #1 gap-closer** (cheapest, safest, hits the likely
+root cause, *causal by construction* — a trailing rank/z needs no fitted statistic,
+so smallest leakage surface of the five). Prefer the trailing **percentile-rank**
+form: outlier-proof and the most regime-robust.
+
+**Code change (single variable vs v18: replace the static scaler in
+`prepare_data_for_finrl`).**
+- `Rl_v50.py`: in `prepare_data_for_finrl`, replace the RobustScaler transform of the
+  indicator/OHLC block with a **causal rolling transform**: for each feature,
+  `z_t = (x_t − rollmean_{t-1..t-W}) / rollstd_{t-1..t-W}` with `W=252`, computed on
+  the FULL, CONTINUOUS series but using ONLY trailing values (windows shifted by 1 so
+  `x_t` is excluded from its own stats). Clip to `[−5, 5]`. The trailing
+  **percentile-rank** variant (`x_t`'s rank within its trailing `W`-window, mapped to
+  `[−1,1]`) is the preferred, outlier-proof form. No fit/transform split needed — the
+  window is self-contained and causal.
+- **Do NOT reset the rolling window at the train/val or val/test boundary (advisor).**
+  Compute on the continuous series so early val/test rows legitimately pull trailing
+  *past* (train) rows into their window; resetting per split starves those rows and
+  silently changes behavior. Trailing-rolling is causal by construction — the whole
+  advantage is that nothing is "fit on train," so do not reintroduce a global fit.
+- Env, reward, features, selector, hyperparams identical to v18.
+
+**How to run.** `python run_panel.py v50` (whole panel; target stocks whose test
+window is a different regime from train — ADANIPORTS, TATAMOTORS).
+
+**Diagnostic / caveat.**
+- **Distinct from v47:** v47 changes WHICH features (level→return); v50 changes HOW
+  the existing features are scaled (static→rolling). Orthogonal; both attack
+  non-stationarity from different sides and could later stack.
+- **Leakage (critical):** the rolling window MUST be strictly trailing (shift by 1 so
+  the current bar is excluded). A centered or inclusive window re-introduces
+  lookahead. Audit with `test_indicator_causality.py`-style prefix equality: the
+  transformed value at `t` must not change when future rows are appended. The first
+  `W` bars have no full window — either warm up (skip) or expanding-window until `W`,
+  and trim consistently with v18's non-null trim.
+- **Distinct from VecNormalize (advisor — pre-empt the "dup" objection):** v18's
+  `VecNormalize(norm_obs)` keeps a **global running** mean/std over ALL steps seen —
+  not windowed, not rank-based, so it is blind to regime shift and to outliers. v50 is
+  **rolling + rank** (regime-robust, bounded). They are different mechanisms; keep
+  VecNormalize on for a clean single-variable diff, but note the interaction in the
+  readout (rolling-normalized inputs are already ~unit-scale, so VecNormalize is
+  roughly a no-op on them).
+- Degeneracy guard + ≥20-trade gate + v37 selector.
+
+**Sources.** Per-stock trailing z-normalization to handle non-stationarity,
+https://arxiv.org/pdf/1810.09965 ; cross-sectional/rolling normalization as standard
+practice, https://arxiv.org/pdf/1910.01491 .
+
+
+---
+
+# Variant v51 — the missing CEILING lever (2026-09-04, auto/research advisor)
+
+## Rl_v51.py — cross-sectional relative-strength features (this stock vs the NIFTY panel)
+
+**Why this is different from the five above.** v46–v50 are *generalization-gap
+closers* — they reshape the SAME per-stock indicator set and cannot add alpha it
+doesn't contain. v51 is one of the few **ceiling levers**: it feeds the policy
+**information it currently cannot see** — where this stock stands *relative to the
+other 49*. Cross-sectional (relative-strength) momentum is among the most robust,
+widely-replicated equity anomalies, and it is **distinct from everything queued**:
+v30/v40 add a single market-regime bit, v44 adds an exogenous market vector, v24/v45
+pool the data — but NONE give a single-stock policy its **cross-sectional context**.
+The advisor ranked this ABOVE v46/v48 for expected value because it can *lift* the
+ceiling, not merely close the gap. It is buildable from data ALREADY in the repo (the
+50 per-stock CSVs) — unlike v40/v44 it needs no external index/VIX file.
+
+**Hypothesis.** A stock outperforming its universe (high cross-sectional momentum
+rank) tends to keep outperforming over daily-to-monthly horizons; a stock at the
+bottom of the cross-section is a different regime than the same stock's *absolute*
+indicators reveal. Adding a few **panel-relative** columns lets the policy condition
+entries/exits on relative strength, a genuine directional signal (not a risk-off
+gate, so it will not manufacture a cash-hold).
+
+**Code change (single variable vs v18: +K cross-sectional feature columns).**
+- New precompute step (once, cached): across the full NIFTY50 panel, on each date `t`
+  compute, per stock, its **cross-sectional rank ∈ [0,1]** of:
+  (i) trailing 21-day return (relative momentum), (ii) trailing 63-day return,
+  (iii) distance from its own 200-DMA (`close/SMA200 − 1`), and (iv) 21-day realized
+  vol (relative vol rank). Ranks are computed **across the universe on the same date**
+  using only that date's trailing values — strictly causal per date.
+- In `process_stock`, date-align that stock's four relative-strength columns to its
+  frame (present identically in train/val/test) and append their names to
+  `list_of_indicators` (observation 101 → 105).
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v51` (whole panel; relative-strength should help
+most on trending leaders/laggards — TATAMOTORS, ADANIENT, RELIANCE).
+
+**Diagnostic / caveat.**
+- **Data / survivorship (flag for run routine):** the cross-section is only the ~50
+  CSVs shipped, and ranks are computed on the stocks that exist on each date — a mild
+  survivorship bias but adequate as a relative signal. Log the panel membership used.
+- **Leakage (critical):** each date's rank uses only trailing per-stock values
+  (returns via `.shift`, trailing vol, trailing 200-DMA). A rank must NOT use the
+  current bar's *future*. Audit with the causality test: a stock's rank column at `t`
+  must be unchanged when future rows are appended (the OTHER stocks' future is also
+  excluded — ranks are per-date, cross-sectional, from trailing windows only).
+- **Distinct from a cash-hold:** relative strength is directional (which stock to be
+  long), not an inaction gate; combined with the ≥20-trade gate + v37 exposure-alpha
+  selector, a degenerate cash-hold cannot score. This is the intended anti-artifact
+  property that makes it a legitimate ceiling challenger.
+- **Stackable:** cross-sectional features are naturally strongest UNDER v24/v45 pooled
+  training (one policy sees the whole panel), so a strong single-stock v51 read is the
+  gate to a pooled v51 follow-up. Keep the first read single-variable vs v18.
+
+**Sources.** Cross-sectional relative-strength / robust equity anomalies and
+cross-sectional standardization, https://arxiv.org/pdf/1910.01491 ; cross-sectional
+rank formation for stock prediction, https://arxiv.org/pdf/2606.08930 ;
+machine-learning cross-sectional return prediction,
+https://link.springer.com/article/10.1007/s00291-022-00693-w .
+
+---
+
+## DESIGN ONLY — v52: meta-labeling act/don't-act filter (López de Prado)
+
+**Idea (advisor runner-up).** Keep v18's policy as the **primary** model deciding
+*direction/size*, and train a lightweight **secondary** classifier (meta-label) that
+decides *whether to act* on each primary signal — the López de Prado meta-labeling
+pattern, which improves precision/F1 and risk-adjusted return by suppressing
+low-confidence trades. **DESIGN ONLY / not a clean single-variable fork:** it is a
+two-component system (primary policy + secondary filter) and would need its own
+train/val protocol for the secondary model, so it violates the single-variable
+discipline the project enforces (the v10/v11 two-changes-at-once trap). Hold until at
+least one gap-closer (v50) and the ceiling lever (v51) have a trustworthy read under
+v37's honest selector; then meta-labeling is the natural way to convert a
+higher-precision primary into fewer, better trades. Source: López de Prado, *Advances
+in Financial Machine Learning*, Ch. 3 (meta-labeling).
