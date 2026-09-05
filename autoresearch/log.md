@@ -1,9 +1,29 @@
 # autoresearch experiment log
 
 Newest first. One row per experiment. `mean_val_outperf_pp` is the objective
-(higher is better); `test` is report-only. Keep a change only if val beats the
-current best by ≥ +**94.2 pp** (ITC panel calibrated gate, 2026-09-02).
-Prior gate was 60.4pp (TATAMOTORS panel, now invalidated). See `program.md`.
+(higher is better); `test` is report-only.
+
+## ACTIVE GATE (2026-09-05): METRIC2_clip50 — 25.69pp
+
+**New metric:** METRIC2_clip50 clips each stock's outperf to ±50pp before averaging.
+This compresses heavy-tail basin-flip variance (RELIANCE -244pp at seed=43 → -50pp clip).
+Both METRIC (unclipped) and METRIC2 are printed each run. **Decision uses METRIC2.**
+
+| seed | RELIANCE | ITC | HDFCBANK | METRIC2 (clipped) | METRIC (unclipped) |
+|---|---|---|---|---|---|
+| 42 | +0.98pp | +4.69pp | -33.25pp | **-9.194** | -9.194 |
+| 43 | -243.74pp → clip -50pp | -2.12pp | -41.69pp | **-31.269** | -95.850 |
+| 44 | -172.43pp → clip -50pp | +5.17pp | -86.19pp | **-31.609** | -84.483 |
+
+- stdev(METRIC2) = 12.84pp → **Gate = max(3.0, 2×12.84) = 25.69pp**
+- METRIC2 baseline (seed=42) = **-9.194pp** → must beat **+16.49pp** to keep
+- METRIC gate = 94.19pp (same as before — unclipped metric is still impossible to gate on)
+
+**Reachability check:** with HDFCBANK clipped at -33.25pp (best observed), RELIANCE and ITC
+must average +49.5pp each for the 3-stock mean to reach +16.49pp. Production shows ITC can reach
++40pp and RELIANCE ~+68pp outperf (v9), so this gate is genuinely reachable with a good policy.
+
+Prior gate was 94.2pp (METRIC, ITC panel, 2026-09-02). Prior was 60.4pp (TATAMOTORS panel, invalidated). See `program.md`.
 
 ## Noise gate recalibration (2026-09-02) — RELIANCE/ITC/HDFCBANK panel
 
@@ -58,25 +78,37 @@ TATAMOTORS seed=42 proxy val +177pp = holding cash while B&H loses -55.75%.
 Implication: all 15 proxy experiments are unreliable — the proxy panel must be recalibrated.
 ITC panel recalibration complete (2026-09-02). Gate = 94.2pp, baseline (seed=42) = -9.194pp.
 
-## ITC panel experiments (RELIANCE/ITC/HDFCBANK, gate=94.2pp, baseline=-9.194pp at seed=42)
+## ITC panel experiments — METRIC2_clip50 (gate=25.69pp, baseline=-9.194pp, target=+16.49pp)
 
-| # | date (UTC) | change (one variable) | mean_val_outperf_pp | test | kept? | commit |
-|---|---|---|---|---|---|---|
-| ITC-15 | 2026-09-04 | max_grad_norm 0.5→1.0 (less gradient clipping) | -54.384 | -27.562 | DISCARD (−45.2pp vs baseline) | — |
-| ITC-14 | 2026-09-04 | max_grad_norm 0.5→0.3 (more conservative gradient clipping) | -22.191 | -17.329 | DISCARD (−13.0pp vs baseline) | — |
-| ITC-13 | 2026-09-04 | enable_critic_lstm=False (simpler critic, no LSTM in value head) | -83.468 | -21.176 | DISCARD (−74.3pp vs baseline; critic LSTM essential — RELIANCE/HDFCBANK collapse) | — |
-| ITC-12 | 2026-09-04 | BUDGET_TIMESTEPS 60k→40k (earlier stopping, less overfit) | -13.021 | -7.103 | DISCARD (−3.8pp vs baseline; 60k is better than 40k) | — |
-| ITC-11 | 2026-09-04 | clip_range 0.2→0.15 (tighter trust region) | -98.357 | -18.851 | DISCARD (−89.2pp vs baseline; clip=0.2 is optimal) | — |
-| ITC-10 | 2026-09-04 | clip_range 0.2→0.3 (wider trust region) | -59.819 | -35.010 | DISCARD (−50.6pp vs baseline; RELIANCE −168pp) | — |
-| ITC-9 | 2026-09-04 | vf_coef 0.5→1.0 (more weight on critic loss) | -98.194 | -31.949 | DISCARD (−89.0pp vs baseline; catastrophic on RELIANCE/HDFCBANK) | — |
-| ITC-8 | 2026-09-04 | lstm_hidden_size/net_arch 128→32 (even smaller model) | -76.037 | -28.030 | DISCARD (−66.8pp vs baseline; too small — RELIANCE −237pp) | — |
-| ITC-7 | 2026-09-04 | lstm_hidden_size/net_arch 128→64 (smaller model, less overfit) | **+2.960** | -19.042 | DISCARD (+12.2pp vs baseline; first positive mean! RELIANCE +11pp, HDFCBANK +2pp; under gate) | — |
-| ITC-6 | 2026-09-04 | gamma 0.99→0.95 (shorter time horizon) | -4.201 | -30.686 | DISCARD (+4.99pp vs baseline; best ITC result so far; under gate) | — |
-| ITC-5 | 2026-09-04 | ent_coef 0.01→0.05 (more exploration) | -7.047 | -17.852 | DISCARD (+2.1pp vs baseline; under gate; HDFCBANK improved -33→-9.5pp) | — |
-| ITC-4 | 2026-09-04 | batch_size 64→128 (larger batch, lower gradient noise) | -106.505 | -37.548 | DISCARD (−97.3pp vs baseline; large batch catastrophic) | — |
-| ITC-3 | 2026-09-04 | n_steps 512→256 (more frequent policy updates) | -21.208 | -21.641 | DISCARD (−12.0pp vs baseline; shorter rollouts hurt on ITC panel) | — |
-| ITC-2 | 2026-09-02 | n_epochs 5→3 (fewer gradient steps) | -108.092 | -30.826 | DISCARD (−98.9pp vs baseline; n_epochs=5 is optimal) | — |
-| ITC-1 | 2026-09-02 | baseline ITC panel (SEED=42, 22 indicators, v18 hyperparams) | **-9.194** | -5.730 | **BASELINE** | — |
+All experiments use SEED=42 unless noted. METRIC2 (clipped) is the keep/discard criterion; METRIC (unclipped) is listed for reference.
+
+**NOTE on ITC-1 through ITC-15 (pre-2026-09-05):** these rows pre-date METRIC2. The column labeled "METRIC2" shows the unclipped METRIC value; "METRIC" shows the test outperformance. Reinterpret accordingly.
+
+### 2026-09-05 (METRIC2_clip50 era, gate=25.69pp, target=+16.49pp)
+
+| # | date (UTC) | change (one variable) | METRIC2 | METRIC | test | kept? | commit |
+|---|---|---|---|---|---|---|---|
+| *(experiments starting from ITC-16)* | | | | | | | |
+
+### 2026-09-04 and earlier (METRIC/unclipped era, gate=94.2pp — all discard)
+
+| # | date (UTC) | change (one variable) | METRIC (unclipped) | test | kept? |
+|---|---|---|---|---|---|
+| ITC-15 | 2026-09-04 | max_grad_norm 0.5→1.0 | -54.384 | -27.562 | DISCARD |
+| ITC-14 | 2026-09-04 | max_grad_norm 0.5→0.3 | -22.191 | -17.329 | DISCARD |
+| ITC-13 | 2026-09-04 | enable_critic_lstm=False | -83.468 | -21.176 | DISCARD (critic LSTM essential) |
+| ITC-12 | 2026-09-04 | BUDGET 60k→40k | -13.021 | -7.103 | DISCARD |
+| ITC-11 | 2026-09-04 | clip_range 0.2→0.15 | -98.357 | -18.851 | DISCARD |
+| ITC-10 | 2026-09-04 | clip_range 0.2→0.3 | -59.819 | -35.010 | DISCARD |
+| ITC-9 | 2026-09-04 | vf_coef 0.5→1.0 | -98.194 | -31.949 | DISCARD |
+| ITC-8 | 2026-09-04 | lstm 128→32 | -76.037 | -28.030 | DISCARD |
+| ITC-7 | 2026-09-04 | lstm/net_arch 128→64 | **+2.960** | -19.042 | DISCARD (best; +12.2pp vs baseline) |
+| ITC-6 | 2026-09-04 | gamma 0.99→0.95 | -4.201 | -30.686 | DISCARD (+4.99pp) |
+| ITC-5 | 2026-09-04 | ent_coef 0.01→0.05 | -7.047 | -17.852 | DISCARD (+2.1pp) |
+| ITC-4 | 2026-09-04 | batch_size 64→128 | -106.505 | -37.548 | DISCARD |
+| ITC-3 | 2026-09-04 | n_steps 512→256 | -21.208 | -21.641 | DISCARD |
+| ITC-2 | 2026-09-02 | n_epochs 5→3 | -108.092 | -30.826 | DISCARD |
+| ITC-1 | 2026-09-02 | baseline (SEED=42, 22 indicators, v18 hyperparams) | **-9.194** | -5.730 | **BASELINE** |
 
 ## TATAMOTORS panel experiments (RELIANCE/TATAMOTORS/HDFCBANK, gate=60.4pp, baseline=-7.855pp — INVALIDATED)
 

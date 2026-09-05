@@ -247,8 +247,13 @@ def run_stock(stock):
 
     val_outperf = val_ret - bh_val
     test_outperf = test_ret - bh_test
+
+    # Degeneracy guard: flag likely cash-hold (val return near 0 while B&H is large in magnitude)
+    # A policy holding cash returns ~0%; genuine active trading produces nonzero return.
+    cash_hold_suspected = abs(val_ret) < 0.5 and abs(bh_val) > 5.0
+    degen_flag = " [SUSPECTED-CASH-HOLD: val~0%]" if cash_hold_suspected else ""
     print(f"[{stock}] val {val_ret:+.2f}% vs B&H {bh_val:+.2f}% = {val_outperf:+.2f}pp | "
-          f"test {test_ret:+.2f}% vs B&H {bh_test:+.2f}% = {test_outperf:+.2f}pp")
+          f"test {test_ret:+.2f}% vs B&H {bh_test:+.2f}% = {test_outperf:+.2f}pp{degen_flag}")
     return val_outperf, test_outperf
 
 
@@ -263,7 +268,15 @@ def main():
         tests.append(t)
     mean_val = float(np.mean(vals))
     mean_test = float(np.mean(tests))
+    # METRIC2: clip per-stock outperf to ±50pp before averaging — reduces heavy-tail
+    # basin-flip variance (HDFCBANK at -83pp becomes -50pp). Diagnostic only; the
+    # official METRIC line below is unchanged and is still the keep/discard criterion.
+    _clip = 50.0
+    mean_val_clip = float(np.mean(np.clip(vals, -_clip, _clip)))
+    mean_test_clip = float(np.mean(np.clip(tests, -_clip, _clip)))
     print(f"elapsed {time.time() - t0:.0f}s")
+    # Diagnostic clipped metric (lower variance; use for gate calibration when METRIC is noise-dominated)
+    print(f"METRIC2_clip50 mean_val_outperf_pp={mean_val_clip:.3f} mean_test_outperf_pp={mean_test_clip:.3f}")
     # Final machine-parseable metric line. val is the objective; test is report-only.
     print(f"METRIC mean_val_outperf_pp={mean_val:.3f} mean_test_outperf_pp={mean_test:.3f}")
 
