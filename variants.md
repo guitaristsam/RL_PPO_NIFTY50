@@ -2112,6 +2112,11 @@ value.
   **σ=0.1** (≈10% of a unit-variance normalized feature). The val env (ValidationCallback) and
   the test env get NO wrapper → deterministic eval, unchanged.
 - Reward, features, selector, hyperparams, LSTM all v18.
+- **DRAFTED as `Rl_v63.py` (UNRUN):** a `TrainObsNoiseWrapper(VecEnvWrapper)` placed OUTSIDE
+  `VecNormalize`, wrapping ONLY the train env passed to `RecurrentPPO`; the callback still
+  receives the plain `VecNormalize` for stat sync, and the returned/saved env is noise-free.
+  `ast.parse` clean, 63 ins/3 del vs v18. Run via `run_panel.py v63` (no registration needed).
+  A run-routine must first smoke-test that noise is train-only (val/test obs identical to v18).
 
 **How to run.** `python run_panel.py v63` (full panel; the effect is a broad regularizer, read
 the panel mean and the train-EV diagnostic).
@@ -2212,3 +2217,85 @@ backtests — López de Prado, "Advances in Financial Machine Learning" (CPCV, D
 Deflated Sharpe Ratio, https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551 ;
 walk-forward / purged CV for financial time series,
 https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3257420 .
+
+## Rl_v66.py — DESIGN-ONLY / LOW PRIORITY — train-fit PCA compression of the observation
+
+**Anchor.** Fork of **v18**. Single variable: replace the 106-indicator observation block with
+its top-`m` train-fit principal components (prices/cash/shares untouched). DESIGN-ONLY and
+LOW PRIORITY — written for completeness with an honest negative prior, not a recommended run.
+
+**Hypothesis.** Observational-overfitting theory (Song et al., 2019) says a chunk of RL
+overfit is the agent latching onto *spurious, redundant* observation features. v18's 106
+pandas-ta indicators are heavily collinear (many are transforms of the same price/vol series).
+PCA fit on the TRAIN split only, projecting val/test through the same components, removes the
+linear redundancy and shrinks the input to `m`≈15–20 uncorrelated axes — a principled
+de-correlation, DISTINCT from v26 (an arbitrary hand-cut to 22 names — an invalidated
+artifact), from v46 (supervised MI *selection* of raw names — keeps original axes), and from
+v50 (rank-normalization — same dimensionality). It is a pure gap-closer (a linear reparam of
+existing info — no new information, so it cannot raise the ceiling).
+
+**Code change (single variable vs v18: obs = train-fit PCA scores).**
+- In `process_stock`, after the train/val/test split and RobustScaler, fit
+  `sklearn.decomposition.PCA(n_components=m)` on `train_df`'s indicator columns ONLY, then
+  `transform` all three splits; replace the indicator block with the `m` component columns.
+  `list_of_indicators` becomes `["PC1"…"PCm"]`. Everything downstream (env, reward, selector,
+  hyperparams) unchanged.
+
+**How to run.** `python run_panel.py v66` (only if a slot is free after v61–v65).
+
+**Diagnostic / caveat (HONEST — this is why it is low priority).**
+- **Poor financial-DNN track record:** the literature repeatedly finds PCA/CART preprocessing
+  does NOT significantly help — and sometimes *degrades* — deep models on market data, because
+  variance-ranked components discard low-variance-but-predictive signal (information loss). Do
+  NOT run this before the higher-value levers; if run and it loses, do not retry other `m`.
+- **Leakage:** PCA MUST be fit on train ONLY and applied to val/test via the frozen components
+  (same discipline as the RobustScaler). A union-fit PCA leaks the test distribution.
+- **`m` is part of the one change** (an `m`∈{10,20,30} sweep is the follow-up, each one
+  variable vs v18). ≥20-trade gate + v37 selector still apply.
+
+**Sources.** Song et al., "Observational Overfitting in Reinforcement Learning" (spurious obs
+features drive overfit), https://arxiv.org/pdf/1912.02975 ; PCA can *degrade* deep stock-prediction
+models via information loss, https://arxiv.org/pdf/2003.01859 .
+
+## Rl_v67.py — test-time stochastic action averaging (inference-side variance reduction, no retraining)
+
+**Anchor.** Fork of **v18**. Single variable: at TEST time only, replace the single
+deterministic `predict(deterministic=True)` with the MEAN of `R` stochastic action samples per
+step (same trained policy, same weights, same LSTM state thread). Training is byte-identical to
+v18; this touches only `test_ppo_model`.
+
+**Hypothesis.** A trained PPO policy still carries per-step action variance (its Gaussian head
+has non-trivial std even late in training — the batch diagnostics show std finishing at
+0.76–1.04). The deterministic action is the distribution mean, but the LSTM-conditioned mean
+itself is a noisy estimate near decision boundaries; averaging `R` stochastic samples
+("average-then-act", the empirically more stable ensemble read-out) smooths action selection
+and cuts the whipsaw that turns into over-trading. It is essentially free — no retraining, no
+new information — so it is a pure execution/variance lever, DISTINCT from v22 (train-time
+*seed* ensemble = R independent trainings) and v41 (SWA = weight averaging). It is the
+inference-time analogue of ensembling with ONE model.
+
+**Code change (single variable vs v18: test read-out only).**
+- `test_ppo_model`: per step, draw `R` samples via `predict(deterministic=False)` threading the
+  SAME `lstm_states`/`episode_starts`, average the `R` continuous actions, and pass the mean to
+  the env. Thread the LSTM state from ONE canonical rollout (e.g. the deterministic pass) to
+  keep the recurrent state well-defined; the averaging affects only the action applied. R=15.
+- Nothing in training, features, reward, or selection changes.
+
+**How to run.** `python run_panel.py v67` (compare test curves vs v18 head-to-head; the ONLY
+difference is the test read-out).
+
+**Diagnostic / caveat.**
+- **Modest, honest upside:** averaging a single policy's own samples reduces action noise but
+  cannot fix a mis-learned policy — expect a small smoothing effect, largest on the high-churn
+  stocks (INFY). If v18's deterministic std is already tiny on a stock, R-averaging ≈ the
+  deterministic action (no change) — that is the expected null, not a bug.
+- **Determinism / reproducibility:** seed the sampling so the test is repeatable; report R as
+  part of the config. Because it changes ONLY inference, it STACKS on any winning train-time
+  variant for free.
+- **Gate:** still must clear ≥20 trades (over-smoothing toward a flat action could suppress
+  trading — read the trade count) and is scored by the v37 selector.
+
+**Sources.** "Average-then-act" ensemble read-out is more stable than per-head greedy, and
+ensembles give ~1/K action-estimate variance reduction: Averaged-DQN (variance reduction by
+averaging), https://arxiv.org/pdf/1611.01929 ; ensemble RL for variance reduction / robustness,
+https://arxiv.org/pdf/2001.05209 .
