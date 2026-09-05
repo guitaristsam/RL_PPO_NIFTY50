@@ -1,149 +1,104 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-05T21:20:00Z
+Last updated: 2026-09-05T23:20:00Z
 
-## Status: IN PROGRESS — v18 panel re-run (correct baseline)
+## Status: IN PROGRESS — v23 panel running (task b7n3rnsrt)
 
-**Current task:** Re-run v18 10-stock panel to establish correct post-vecnorm-fix baseline  
-**Then:** v23 panel (warmup=150k, eval_freq=25k)
+**Current task:** v23 full panel (warmup=150k, eval_freq=25k) — 0/10 complete as of 23:15 UTC
 
-## CRITICAL ADVISOR FINDING (2026-09-05)
+## EXPLOSIVE FINDING THIS SESSION (2026-09-05)
 
-Independent advisor (opus) raised: the `results/` files (which we've been using as the
-v18 baseline at -38.78pp) are from the INITIAL REPO COMMIT (2026-04-29). The vecnorm fix
-(91e620d, 2026-06-11) reportedly only re-ran RELIANCE. So:
+The "v18 baseline" used for all prior comparisons was pre-vecnorm-fix for 9/10 stocks.
 
-- RELIANCE: post-fix (-41.47pp) ✓
-- ITC: PRE-FIX (+40.10pp) — unconfirmed with current code
-- ADANIENT: PRE-FIX (+66.83pp) — unconfirmed with current code
-- Others: pre-fix data
+**Correct v18 baseline: -72.74pp** (not -38.78pp).
+**ITC +40pp does NOT reproduce** with current code (fresh run: -65.99pp).
+**ADANIENT: +4pp (not +67pp)** — still beats B&H, barely.
 
-**If ITC and ADANIENT don't reproduce with post-fix code, v18 may have 0 genuine B&H-beats.**
-This retroactively recontextualizes all v19/v20/v21 rejections.
+**v19/v20/v21 were NOT losses vs correct baseline:**
+- v19: -72.38pp (+0.36pp vs v18 clean)
+- v20: -71.58pp (+1.16pp vs v18 clean)
+- v21: -73.16pp (-0.42pp vs v18 clean)
+All within ±1.2pp of correct v18 — indistinguishable.
 
-**Tonight's priority: run clean v18 panel → results_v18/**
+## Tonight's Work (Session 2026-09-05)
 
-## Completed Experiments Summary
+### Completed
+- [x] v20 READOUT written (results_v20/READOUT.md)
+- [x] v18 clean 10-stock panel run (results_v18/) — confirmed baseline correction
+- [x] NEEDS_HUMAN.md written with v18 baseline issue + v27 proposal
+- [x] PR #3 updated with correct framing
+- [x] Advisor (Opus) consulted — recommends v27 "start fully invested" > turnover penalty
 
-| Variant | Mean outperf | Beats B&H | vs v18 (-38.78pp) | READOUT |
-|---------|-------------|-----------|-------------------|---------|
-| v19 | -72.38pp | 0/10 | -33.6pp worse | results_v19/READOUT.md (run-a) |
-| v21 | -73.16pp | 1/10 (degen) | -34.4pp worse | results_v21/READOUT.md |
-| v20 | -71.58pp | 0/10 (degen) | -32.8pp worse | results_v20/READOUT.md ✓ WRITTEN |
-| v23 | TBD | TBD | TBD | NOT STARTED |
+### In Progress
+- [ ] v23 panel (task b7n3rnsrt, started ~23:15 UTC) — expected ~23:15 + 150 min = ~01:45 UTC
 
-Note: All three "vs v18" deltas cluster at -32 to -34pp. Advisor suspects biased
-denominator (v18 baseline inflated by pre-fix ITC/ADANIENT data).
+## v18 Clean Results (for READOUT reference)
 
-## Progress Tonight (2026-09-05)
+| Stock | Outperf | Sharpe | Trades | B&H Return |
+|-------|---------|--------|--------|-----------|
+| RELIANCE | -76.93pp | -0.102 | 139 | +68.70% |
+| INFY | -39.50pp | -0.598 | 59 | +22.50% |
+| TATAMOTORS | -257.93pp | -0.559 | **5 DEGEN** | +250.97% |
+| ITC | -65.99pp | 0.534 | 129 | +105.88% |
+| ADANIENT | +4.12pp | -0.180 | 53 | -21.61% |
+| HDFCBANK | -15.91pp | 0.300 | 46 | +30.62% |
+| TCS | -5.35pp | -0.010 | 64 | +4.96% |
+| SBIN | -44.39pp | 0.452 | 98 | +88.72% |
+| AXISBANK | -24.74pp | 0.587 | 69 | +51.62% |
+| HINDALCO | -200.74pp | -0.292 | 181 | +178.12% |
+| **Mean** | **-72.74pp** | +0.013 | 84.3 | +98.04% |
 
-### v18 clean panel (results_v18/)
-- [x] RELIANCE — RUNNING (started ~21:18 UTC)
-- [ ] INFY
-- [ ] TATAMOTORS
-- [ ] ITC
-- [ ] ADANIENT
-- [ ] HDFCBANK
-- [ ] TCS
-- [ ] SBIN
-- [ ] AXISBANK
-- [ ] HINDALCO
+## v23 Completion Steps (CRITICAL for next session)
 
-### v23 panel (results_v23/) — start AFTER v18 panel
-- [ ] All 10 stocks
+When task b7n3rnsrt completes:
+1. Collect results: `for stock in RELIANCE INFY TATAMOTORS ITC ADANIENT HDFCBANK TCS SBIN AXISBANK HINDALCO; do report="results_v23/${stock}/${stock}_report.txt"; if [ -f "$report" ]; then outperf=$(grep -i "outperform" "$report" | head -1); trades=$(grep -i "total trades" "$report" | head -1); echo "$stock: $outperf | $trades"; fi; done`
+2. Key diagnostic: TATAMOTORS trades count. If >20, the warmup fix worked.
+3. Compare mean vs v18 clean (-72.74pp). If >0pp better with active policies, note improvement. If >5pp better with TATAMOTORS fixed, consider declaring cautious progress.
+4. Write results_v23/READOUT.md
+5. Commit and push all results
+6. Update PR #3 with v23 results
+7. Delete lease: `rm autoresearch/.lease-run-b && git add -A && git commit && git push`
 
-## Setup Commands (CRITICAL for fresh session)
+## Setup Commands for Fresh Session
 
 ```bash
-# Install stable-baselines and friends:
 pip install stable-baselines3 sb3-contrib finrl gymnasium scikit-learn matplotlib tensorboard tqdm rich -q
 
-# Install pandas_ta (NOT normally available in Python 3.11):
 WHL="https://files.pythonhosted.org/packages/00/c8/4ed6c9bc469bc937e0e437da78a437e320a9a001984a556463b8a00f5910/pandas_ta-0.4.67b0-py3-none-any.whl"
-curl -sL "$WHL" -o /tmp/pandas_ta-0.4.67b0-py3-none-any.whl
-pip install /tmp/pandas_ta-0.4.67b0-py3-none-any.whl --ignore-requires-python -q
+curl -sL "$WHL" -o /tmp/pandas_ta.whl
+pip install /tmp/pandas_ta.whl --ignore-requires-python -q
 
-# Patch hma.py for Python 3.11:
 python - << 'PATCH'
 path = '/usr/local/lib/python3.11/dist-packages/pandas_ta/overlap/hma.py'
-with open(path) as f: content = f.read()
+with open(path) as f: c = f.read()
 old = '    hma.name = f"HMA{"" if mamode == "wma" else mamode[0]}_{length}"'
 new = '    _mm = "" if mamode == "wma" else mamode[0]\n    hma.name = f"HMA{_mm}_{length}"'
-if old in content:
-    content = content.replace(old, new)
-    with open(path, 'w') as f: f.write(content)
+if old in c:
+    with open(path,'w') as f: f.write(c.replace(old,new))
     print('patched')
-else:
-    print('already patched or different version')
+else: print('ok')
 PATCH
 
-# Patch finrl __init__.py:
 python - << 'PATCH'
 path = '/usr/local/lib/python3.11/dist-packages/finrl/__init__.py'
 with open(path, 'w') as f:
-    f.write("""from __future__ import annotations
-try:
-    from finrl.test import test
-except Exception:
-    pass
-try:
-    from finrl.trade import trade
-except Exception:
-    pass
-try:
-    from finrl.train import train
-except Exception:
-    pass
-""")
+    f.write("from __future__ import annotations\ntry:\n    from finrl.test import test\nexcept Exception:\n    pass\n")
 print('finrl patched')
 PATCH
 ```
 
-## Running v18 panel (per stock):
+## Immediate Next Step
+Wait for task b7n3rnsrt notification (v23 panel complete) then write READOUT.
 
-```bash
-python -c "
-import os
-os.environ['RESULTS_DIR'] = 'results_v18'
-os.environ['TRAINED_MODEL_DIR'] = 'models_v18'
-os.environ['CONSOLIDATED_REPORT'] = 'consolidated_report_v18.txt'
-from Rl_v18 import process_stock, NIFTY50_PATH
-process_stock(os.path.join(NIFTY50_PATH, 'STOCK_daily.csv'))
-"
-```
+## Key Insights for Next Session
+- Correct v18 baseline = -72.74pp
+- All v19-v21 experiments are null results (±1pp of baseline)
+- TATAMOTORS degeneracy is the biggest single issue (-258pp, only 5 trades)
+- v27 "start fully invested" is the advisor's top recommendation (attacks beta gap)
+- Use median outperformance in addition to mean for future comparisons
+- FRONTIER.md needs correcting (auto-tinker's job but should be flagged)
 
-Or all at once:
-```bash
-python run_panel.py v18
-```
-
-## Running v23 panel:
-
-```bash
-python run_panel.py v23
-```
-
-## Gotchas
-- ~10-15 min per stock on CPU
-- Resume guard: if results_vNN/{SYMBOL}/{SYMBOL}_report.txt exists, stock is skipped
-- Commit after each stock to preserve progress
-- models_v18/ and models_v23/ are gitignored — only results committed
-- Watch for degenerate cash-holds (< 20 trades)
-
-## Advisor Recommendations (act on these next session if time runs out)
-1. v27: turnover penalty (reward -= λ * traded_value/equity). Advisor estimated costs
-   eat 20.1% of log-equity on average; 5/10 stocks would beat B&H GROSS. Highest
-   single-variable lever available.
-2. v28: exposure floor. Policy is in market 44.5% of time, capturing 14.8% of B&H move.
-3. Consider median outperformance + gross-of-cost as reporting metric.
-
-## Key Diagnostics to Look For in v18 Clean Run
-- Does ITC still beat B&H? (+40pp in pre-fix data)
-- Does ADANIENT still beat B&H? (+67pp in pre-fix data)
-- If neither reproduces, entire rejection record needs recontextualization
-
-## Next after v18 + v23
-- Write READOUT for both with v18-clean as correct baseline
-- If v23 beats clean-v18, declare NEW CHAMPION
-- Update PR with both READOUTs
-- Plan v27 design and write Rl_v27.py
+## Advisor Recommendations (Opus, 2026-09-05)
+1. v27 = v18 + initial position fully invested (not turnover penalty)
+2. Add log(PPO_final/BH_final) ratio to summarize_results.py, report median
+3. If v23 also flat → stop varying rewards, feature set is the constraint
