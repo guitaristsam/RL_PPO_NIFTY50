@@ -4,9 +4,9 @@
 **Branch:** auto/run-b
 **Variant:** Rl_v21.py — target-exposure action (`raw_action ∈ [-1,1]` → `target_frac ∈ [0,1]`)
 
-> NOT A NEW CHAMPION. v21 mean outperf -73.16pp < v18 10-panel recomputed baseline -38.8pp. Variant REJECTED.
+> ⚠️ REVISED (2026-09-05): The -38.8pp baseline used here was pre-vecnorm-fix data. Correct v18 baseline = **-72.74pp** (see `results_v18/READOUT.md` on auto/run-b).
 >
-> FRONTIER.md stored -63.2pp (may reflect a different panel or prior computation). The -38.8pp used here is computed directly from v18 per-stock results on the same 10-stock panel — use this figure for apples-to-apples comparisons.
+> **v21 (-73.16pp) vs v18 clean (-72.74pp) = -0.42pp — INDISTINGUISHABLE.** v21 is a null result, not a regression. Original rejection was invalid.
 
 ---
 
