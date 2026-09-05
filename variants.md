@@ -1950,3 +1950,265 @@ then `python run_panel.py v59`. Priority: INFY (over-trading), TATAMOTORS/RELIAN
 **Sources.** Zhang, Zohren & Roberts, "Deep Reinforcement Learning for Trading" (volatility
 scaling in the reward for trend-following), https://arxiv.org/abs/1911.10107 ;
 https://arxiv.org/pdf/1911.10107 .
+
+---
+
+# Variants v61–v65 (2026-09-05) — forks from the v18 champion
+
+Anchored to the **v18 production champion** (not v26, which is an invalidated cash-hold
+artifact). Each is ONE variable vs v18. Two independent advisor passes this session
+(boundary-a pre-write ranking, boundary-b pre-PR) drove selection: **priority order
+v61 > v62 > v63 > v64**, with **v65 a separate measurement-integrity prerequisite** (it
+changes the yardstick, not the model). Framing carried over from the v46–v60 batch:
+a *gap-closer* narrows the train→test generalization gap (critic EV 0.95–0.99 on train,
+poor test) but cannot raise the achievable ceiling; a *ceiling lever* adds genuinely new
+information. The board's core problem is BOTH a generalization gap AND a low signal
+ceiling, so the batch deliberately mixes one ceiling lever (v61) with three gap-closers
+(v62–v64) plus a yardstick fix (v65).
+
+Explicitly **killed this session** (do NOT propose): (1) `VecNormalize(norm_reward=True)` —
+v18's reward is already log-scaled and clipped to [−10,10]; a moving-std divisor fights the
+fixed v12 DD-penalty scale for ~zero upside. (2) snapshot ensemble via cyclic LR — snapshots
+from ONE overfitting run are highly correlated and share the same overfit (and half would be
+drawn from the post-100k decay regime), so it is dominated by v22's independent seeds and
+v41's SWA. (3) entropy-coefficient decay from step 0 — the val callback already early-stops
+the late-training decay this targets, and the literature finds naive decay-from-start can
+*underperform* the constant baseline (stabilize-then-decay is what wins). Deprioritized, not
+written.
+
+## Rl_v61.py — market-breadth exogenous feature (% of the NIFTY panel above its own 50-DMA) — TOP CEILING LEVER of this batch
+
+**Anchor.** Fork of **v18**. Single variable: append a small market-internal breadth vector
+(same value on every stock's frame for a given date) to the observation. The advisor's #1
+pick: the only candidate in this batch that adds genuinely NEW information, and it is
+buildable entirely from the 50 in-repo CSVs (no external data, no `NEEDS_HUMAN` gate — unlike
+v60's India VIX).
+
+**Hypothesis.** *Market breadth* — the fraction of the NIFTY50 universe trading above its own
+50-day moving average — is a classic regime signal with documented forward-return content:
+broad participation (>~70% above their MA) marks durable uptrends and washouts (<~20%) precede
+durable lows, and the informative case is the *divergence* (index up while breadth falls =
+narrowing, late-cycle rally). This is information a single stock's own OHLCV cannot contain:
+it is a property of the *cross-section*. It is strictly distinct from v30/v40/v44 (which derive
+a regime bit/vector from ONE index series vs its DMA — a single time series, not breadth) and
+from v51 (this-stock's rank *within* the panel — relative strength, not aggregate
+participation). A per-stock policy that can see aggregate participation can lean into
+broad-based trends and de-risk into narrowing ones.
+
+**Code change (single variable vs v18: +breadth columns).**
+- New precompute helper `compute_market_breadth(nifty50_path)` (run ONCE, cached to
+  `data/_market_breadth.csv`): for each `datetime` across all `*_daily.csv`, compute each
+  listed stock's own trailing 50-DMA (`close.rolling(50).mean()`, trailing/right-aligned),
+  then breadth(t) = mean over stocks-listed-on-t of `1[close_t > DMA50_t]`. Emit (i) breadth
+  level ∈ [0,1], (ii) breadth − breadth_{63-day trailing mean} (divergence/momentum), (iii)
+  1[breadth > 0.5] regime flag. K≈3.
+- In `process_stock`, left-join the cached breadth frame on `datetime` BEFORE the split
+  (values are market-wide, identical across stocks); forward-fill past gaps only (never bfill
+  across the split). Append the 3 names to `list_of_indicators`.
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python -c "from Rl_v61 import compute_market_breadth, NIFTY50_PATH;
+compute_market_breadth(NIFTY50_PATH)"` once, then `python run_panel.py v61` (breadth is
+market-wide → read the panel MEAN, not one stock).
+
+**Diagnostic / caveat.**
+- **Causality (critical):** each stock's 50-DMA and the 63-day breadth mean MUST be trailing
+  (`.rolling`, never centered). breadth(t) uses only closes at/through t. `.shift`-audit with
+  `test_indicator_causality.py` — breadth columns at t must be invariant to appended future
+  rows. Add the breadth names to `test_indicator_audit.py`'s expected set (they are not on the
+  known-leakage list, but the audit uses an explicit version list — v61 must be added there).
+- **Survivorship (advisor flag):** compute breadth over only the names actually LISTED on date
+  t (non-NaN close), not the fixed final-panel membership — otherwise early dates borrow the
+  survival of stocks not yet public. With only the 50 in-repo CSVs, note this is a *proxy* for
+  true NIFTY50 breadth (real historical membership churns); acceptable as a market-internal
+  signal, but state it in the report.
+- **Slow-moving (advisor flag):** breadth is near-constant within a 15% test window, so it
+  helps *regime gating* (which trend to trust), not per-bar timing. Expect its value as a
+  *conditioning* feature that sharpens other signals, and read max-DD / Sharpe alongside
+  outperformance. ≥20-trade gate + v37 exposure-adjusted-alpha selector so a breadth-driven
+  cash-hold cannot win.
+- Adds only ~3 dims (mild tension with the v55 capacity finding). Outranks v58 (calendar) as
+  an information lever; comparable to v60 (VIX) but needs NO external data.
+
+**Sources.** Market breadth (% above MA) as a regime filter / forward-return signal:
+https://www.lpl.com/research/blog/market-breadth-and-market-returns.html ;
+https://www.schwab.com/learn/story/breadth-check-strength-and-weakness-trend-tracker ;
+% of stocks above the 50/200-day MA as breadth regime thresholds,
+https://www.thetrading.tools/market-breadth .
+
+## Rl_v62.py — action-repeat / sticky actions (env-side decision-frequency prior)
+
+**Anchor.** Fork of **v18**. Single variable: the env holds each chosen action for `k`
+consecutive bars before querying the policy again (decision every `k`-th bar; the intervening
+bars re-apply the last action, then settle). Everything else byte-identical to v18.
+
+**Hypothesis.** v18's losses are partly whipsaw/over-trading (INFY: 206 trades; the batch
+diagnostics show high-variance churn). A per-bar decision frequency lets the policy react to
+one-day noise it cannot distinguish from signal. *Coarsening the decision frequency* is a
+structural prior for trend-following: it forces positions to persist, cutting turnover-driven
+variance and transaction-cost bleed. This is mechanistically DISTINCT from the reward-side
+anti-churn levers already designed — v35 (turnover penalty) and v39 (inaction penalty) *price*
+trading in the reward; v62 changes the *environment's* action cadence directly, so the policy
+never even chooses on the skipped bars. In the DRL-trading literature PPO specifically is found
+to perform BETTER with larger action-repeat values (k≈5–10) than k=1 (A2C prefers small k) —
+a rare env-side prior with direct PPO-in-trading support.
+
+**Code change (single variable vs v18: action cadence).**
+- `IntegerTradingEnv.step`: add a counter; on bars where `step_count % k != 0`, re-use the
+  cached `action_shares` from the last decision bar (subject to the same budget/position
+  re-validation in `_process_action`, since cash/holdings changed) instead of the policy's new
+  action. Cache the raw decision on `k`-boundary bars. Reward accrues every bar as usual (v12
+  log-return − DD, unchanged). Start with **k=3** (small enough to stay well above the
+  ≥20-trade gate on a ~370-bar test window).
+- Nothing else changes: features, reward, selector, hyperparams, LSTM all v18.
+
+**How to run.** `python -c "from Rl_v62 import process_stock, NIFTY50_PATH; import os;
+process_stock(os.path.join(NIFTY50_PATH,'INFY_daily.csv'))"` (INFY = the over-trading case),
+then `python run_panel.py v62`.
+
+**Diagnostic / caveat.**
+- **Gate interaction (advisor flag — the key risk):** large `k` starves trading and drifts
+  toward the degenerate cash-hold the ≥20-trade gate exists to reject. k=3 is chosen to keep
+  ≳30 decision bars available; if trade count on any stock falls below 20, that stock's result
+  is void — do NOT raise k to chase a smoother curve. If k=3 clears the gate AND lifts
+  exposure-adjusted alpha, a k=2/k=5 mini-sweep is the natural follow-up (each still ONE
+  variable vs v18).
+- **Not a hold-action substitute:** v18 already has a "do nothing" action (action≈0). v62 is
+  about *cadence*, not adding a hold — the mechanism is persistence of the last non-trivial
+  decision, which is why it attacks whipsaw specifically.
+- Read turnover and cost drag explicitly (trades.csv): the win condition is *fewer, better*
+  trades, not merely fewer trades. Score with the v37 selector.
+- Honest flag: sticky actions have a MIXED record (in ALE they typically *reduce* performance);
+  the positive evidence is specifically PPO-in-trading. If k=3 regresses vs v18, discard —
+  do not retry larger k (that only deepens the cash-hold risk).
+
+**Sources.** Sticky-actions / action-repeat definition & PPO-prefers-larger-k in trading:
+https://arxiv.org/pdf/2004.06627 (An Application of Deep RL to Algorithmic Trading) ;
+sticky actions as an env stochasticity/robustness mechanism (ALE), https://arxiv.org/pdf/1812.06110 .
+
+## Rl_v63.py — additive Gaussian input-noise injection during training (data-space regularizer)
+
+**Anchor.** Fork of **v18**. Single variable: during TRAINING only, add small zero-mean
+Gaussian noise to the (already VecNormalized) observation before it reaches the policy. Noise
+is OFF at validation and test. Everything else byte-identical to v18.
+
+**Hypothesis.** The generalization gap (train critic EV 0.95–0.99, poor test) is the signature
+of the policy memorizing the ~1750 training bars. Injecting small input jitter during training
+is a data-space regularizer: it smooths the policy/value functions over an ε-ball around each
+observed state, which the RL-generalization literature (Selective Noise Injection, IBAC;
+Igl et al. NeurIPS 2019) shows improves transfer to held-out states/environments. It is
+materially DIFFERENT from the two rejected/adjacent levers: (1) rejected weight/L2/reward
+*regularization* penalizes parameters or reward — a parameter-space penalty; v63 perturbs the
+*inputs* — a data-space augmentation with no penalty term. (2) v27 (feature-masking) *zeroes
+whole features* (dropout-style); v63 *jitters ALL features by a small amount* (additive), a
+distinct corruption model that preserves each feature's information while blurring its exact
+value.
+
+**Code change (single variable vs v18: train-time obs noise).**
+- A thin `VecEnvWrapper` (or observation hook) placed OUTSIDE `VecNormalize` in
+  `train_ppo_model` only: `obs_noisy = obs + N(0, σ²)`, applied on the *normalized* obs so a
+  single global σ is scale-consistent across the 106 heterogeneous features (the advisor's
+  calibration point: perturb POST-VecNorm, not on raw indicator scales). σ small — start
+  **σ=0.1** (≈10% of a unit-variance normalized feature). The val env (ValidationCallback) and
+  the test env get NO wrapper → deterministic eval, unchanged.
+- Reward, features, selector, hyperparams, LSTM all v18.
+
+**How to run.** `python run_panel.py v63` (full panel; the effect is a broad regularizer, read
+the panel mean and the train-EV diagnostic).
+
+**Diagnostic / caveat.**
+- **Primary read:** does train critic EV drop below v18's 0.95–0.99 *and* does the val curve's
+  post-100k decay flatten? If EV still pegs at 0.99, σ is too small (or the overfit is
+  time-of-episode structure, not per-state memorization → points to v28/v43, not more noise).
+- **Eval must stay clean:** if noise leaks into val/test the metric is corrupted and
+  degenerate-selection risk rises — assert the wrapper is train-only in a one-line smoke check.
+- **Advisor's expectation-management:** with 106 mostly-weak indicators, jitter may simply
+  drown the little signal present → modest upside; low cost, run it, don't over-hope. If it
+  helps, it STACKS cleanly under v55 (capacity) and the feature levers.
+- σ is part of the ONE change (a σ=0.05/0.1/0.2 sweep is the follow-up, each still one variable
+  vs v18). Do NOT also add a noise *schedule* — that would be a second knob.
+
+**Sources.** Igl et al., "Generalization in RL with Selective Noise Injection and Information
+Bottleneck," NeurIPS 2019, https://arxiv.org/html/1910.12911 ;
+https://papers.nips.cc/paper/9546-generalization-in-reinforcement-learning-with-selective-noise-injection-and-information-bottleneck.pdf ;
+data augmentation for RL generalization (RAD/DrAC family),
+https://proceedings.neurips.cc/paper/2021/file/2b38c2df6a49b97f706ec9148ce48d86-Paper.pdf .
+
+## Rl_v64.py — explicit short-lag return frame-stack (append last k daily log-returns to the observation)
+
+**Anchor.** Fork of **v18**. Single variable: append the last `k` daily close-to-close
+log-returns as explicit observation columns. Everything else byte-identical to v18.
+
+**Hypothesis.** v18 asks the LSTM to reconstruct recent momentum from a stream of levels and
+indicators. Making the last few returns *explicit* offloads that reconstruction from the
+recurrent memory onto the input, a representation change that in practice stabilizes learning
+and often helps even when the information is nominally derivable. It is DISTINCT from v54
+(weekly-resampled multi-timeframe context — a coarser horizon) and from v47 (which *replaces*
+the whole feature set with stationary returns); v64 *adds* a tiny stationary short-lag block on
+top of v18's existing 106 features, changing only the representation of recent momentum.
+
+**Code change (single variable vs v18: +k lag-return columns).**
+- `add_lag_return_features(df, k=5)`: `logret = log(close).diff()`, then columns
+  `logret_lag_1 … logret_lag_k` via `logret.shift(1..k)` (all strictly past bars — lag_1 is
+  yesterday's return, known at today's decision). Append names to `list_of_indicators`. K=5.
+- Leading NaNs handled by v18's existing trim-to-first-all-non-null + ffill/0 path (no new NaN
+  logic). Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v64` (full panel).
+
+**Diagnostic / caveat.**
+- **Causality:** every column is a `.shift(≥1)` of a past return → trivially causal; still run
+  `test_indicator_causality.py`, and add v64 to `test_indicator_audit.py`'s explicit version
+  list (lag-returns are not leakage names, but the audit is version-gated).
+- **Nearly a gap-closer (advisor):** returns are derivable from levels the obs already carries,
+  so almost no NEW information — the value is representational (offloading the LSTM), so expect
+  a small effect. Cheapest of the four to implement; fine to include, ranked below v61–v63.
+- Adds k=5 dims (mild capacity tension); if it helps, it composes with v55.
+- k is part of the one change (k∈{3,5,10} is the follow-up sweep). Do not also change scaling.
+
+**Sources.** Frame-stacking / explicit recent-observation history as a standard RL input prior:
+https://arxiv.org/pdf/1812.06110 ; stationary return features for financial RL,
+https://arxiv.org/abs/1911.10107 .
+
+## METHODOLOGY (not a model variant) — v65: walk-forward multi-fold TEST evaluation (fix the yardstick)
+
+**Anchor / status.** NOT a fork of v18's model — a change to how EVERY variant is scored. The
+advisor flagged this as arguably the highest-leverage item in the batch, because it fixes the
+measurement that all of v19–v64 inherit. Companion script, not an `Rl_vNN.py`. Distinct from
+v29/v38 (which add multi-window *validation/checkpoint-selection*) and v37 (exposure-adjusted
+*selector*): v65 changes the final *test* evaluation into multiple folds.
+
+**Problem it fixes.** The entire champion ranking (v18 mean −63.2pp, 1/10 beats B&H) rests on
+ONE 15% chronological test slice per stock. A single window is a single draw: "beats B&H" on
+that slice can be the luck of one regime rather than skill, and every fork is judged against
+the same possibly-atypical yardstick. No amount of model tuning fixes a noisy ruler.
+
+**Change (one methodological variable: single-fold → walk-forward multi-fold test).**
+- New `walkforward_eval.py`: instead of one 70/15/15 split, sweep the test window forward in
+  `F` expanding/rolling folds (e.g. train-on-past / validate / test-next-slice, advance,
+  repeat), reusing v18's existing `train_ppo_model` / `test_ppo_model` / v37 selector unchanged
+  per fold. Report per-stock the DISTRIBUTION of exposure-adjusted alpha across folds (mean,
+  std, % of folds beating B&H, and a Deflated-Sharpe-style adjustment for the fold count), not
+  a single number.
+- Purely additive: does not touch any `Rl_vNN.py`; a variant is "better" only if it wins on the
+  fold *distribution*, which is far harder to fake than one window.
+
+**How to run.** `python walkforward_eval.py v18` to establish the multi-fold champion baseline,
+then `python walkforward_eval.py v61` (etc.) and compare distributions.
+
+**Diagnostic / caveat.**
+- **Cost:** F folds ≈ F× the training compute per stock. Start with F=3 on a 3-stock panel
+  (RELIANCE/ITC/HDFCBANK, the recalibrated proxy panel) before the full 10 × F.
+- **Causality across folds:** each fold's scalers/VecNormalize/feature computation must be fit
+  on that fold's train prefix ONLY (the v18 discipline, per fold) — no cross-fold leakage. Reuse
+  a purge/embargo gap (v33) between train and test of each fold.
+- **Interpretation:** if v18's single-window "1/10 beats B&H" collapses to "beats B&H in a small,
+  inconsistent fraction of folds," that RE-FRAMES the whole project (the one-window wins were
+  partly luck) and should be logged to the FRONTIER as a measurement correction — higher
+  leverage than any single fork, because it tells the run routines which apparent wins are real.
+
+**Sources.** Combinatorial purged cross-validation & the multiple-testing/overfit problem in
+backtests — López de Prado, "Advances in Financial Machine Learning" (CPCV, Deflated Sharpe);
+Deflated Sharpe Ratio, https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551 ;
+walk-forward / purged CV for financial time series,
+https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3257420 .
