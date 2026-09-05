@@ -1966,6 +1966,17 @@ information. The board's core problem is BOTH a generalization gap AND a low sig
 ceiling, so the batch deliberately mixes one ceiling lever (v61) with three gap-closers
 (v62–v64) plus a yardstick fix (v65).
 
+**Two standing pointers from the boundary-b advisor** (fold into next session's run order):
+(1) **v65 (walk-forward multi-fold TEST eval) is plausibly the single highest-leverage item
+here — above v61.** The project's "0/49 survive FDR / PPO ≈ coin-flip vs SMA" verdicts all rest
+on ONE 15% window per stock; the multi-fold alpha *distribution* is what tells you whether ANY
+edge exists before more model forks are worth running. (2) For a *per-stock, information-dense*
+ceiling lever, the already-designed **v51 (cross-sectional relative-strength RANK of this stock
+within the 50-name panel, per date)** is stronger than v61's single slow breadth scalar — v61
+is regime-gating, v51 is a dense per-stock signal. They share the same cross-panel precompute
+and the same survivorship caveat, so **draft v51 and v61 together**; run v51 as the primary
+ceiling lever, v61 as the market-wide complement.
+
 Explicitly **killed this session** (do NOT propose): (1) `VecNormalize(norm_reward=True)` —
 v18's reward is already log-scaled and clipped to [−10,10]; a moving-std divisor fights the
 fixed v12 DD-penalty scale for ~zero upside. (2) snapshot ensemble via cyclic LR — snapshots
@@ -2165,9 +2176,10 @@ top of v18's existing 106 features, changing only the representation of recent m
 - **Causality:** every column is a `.shift(≥1)` of a past return → trivially causal; still run
   `test_indicator_causality.py`, and add v64 to `test_indicator_audit.py`'s explicit version
   list (lag-returns are not leakage names, but the audit is version-gated).
-- **Nearly a gap-closer (advisor):** returns are derivable from levels the obs already carries,
-  so almost no NEW information — the value is representational (offloading the LSTM), so expect
-  a small effect. Cheapest of the four to implement; fine to include, ranked below v61–v63.
+- **It IS a gap-closer (advisor):** the LSTM already ingests the ordered sequence, so explicit
+  lagged returns are mostly redundant re-encoding — a feature-convenience, no NEW information.
+  The value is representational (offloading the LSTM), so expect a small effect. Cheapest of the
+  four to implement; fine to include, ranked below v61–v63.
 - Adds k=5 dims (mild capacity tension); if it helps, it composes with v55.
 - k is part of the one change (k∈{3,5,10} is the follow-up sweep). Do not also change scaling.
 
@@ -2204,9 +2216,14 @@ then `python walkforward_eval.py v61` (etc.) and compare distributions.
 **Diagnostic / caveat.**
 - **Cost:** F folds ≈ F× the training compute per stock. Start with F=3 on a 3-stock panel
   (RELIANCE/ITC/HDFCBANK, the recalibrated proxy panel) before the full 10 × F.
-- **Causality across folds:** each fold's scalers/VecNormalize/feature computation must be fit
-  on that fold's train prefix ONLY (the v18 discipline, per fold) — no cross-fold leakage. Reuse
-  a purge/embargo gap (v33) between train and test of each fold.
+- **Causality across folds (advisor — specify the embargo SIZE):** each fold's
+  scalers/VecNormalize/feature computation must be fit on that fold's train prefix ONLY, AND the
+  embargo gap between a fold's train and test must be **≥ the longest indicator lookback**
+  (v18's 50-DMA-and-longer windows; a breadth/regime feature can be longer) **PLUS the LSTM
+  burn-in** — otherwise test-side features computed adjacent to train leak trailing-window
+  information across the boundary. Also **recompute per-fold-train**, not once on the full
+  series: `hmax`/median-close, the first-all-non-null trim row, and every rolling feature. A
+  gap sized only to "a few bars" is the trap.
 - **Interpretation:** if v18's single-window "1/10 beats B&H" collapses to "beats B&H in a small,
   inconsistent fraction of folds," that RE-FRAMES the whole project (the one-window wins were
   partly luck) and should be logged to the FRONTIER as a measurement correction — higher
@@ -2250,6 +2267,9 @@ existing info — no new information, so it cannot raise the ceiling).
   NOT run this before the higher-value levers; if run and it loses, do not retry other `m`.
 - **Leakage:** PCA MUST be fit on train ONLY and applied to val/test via the frozen components
   (same discipline as the RobustScaler). A union-fit PCA leaks the test distribution.
+- **Scope (advisor):** compress ONLY the indicator block. Cash, position, and price state must
+  pass through verbatim — the agent needs them exactly, and folding them into principal
+  components scrambles the account state the env logic and reward depend on.
 - **`m` is part of the one change** (an `m`∈{10,20,30} sweep is the follow-up, each one
   variable vs v18). ≥20-trade gate + v37 selector still apply.
 
@@ -2257,22 +2277,23 @@ existing info — no new information, so it cannot raise the ceiling).
 features drive overfit), https://arxiv.org/pdf/1912.02975 ; PCA can *degrade* deep stock-prediction
 models via information loss, https://arxiv.org/pdf/2003.01859 .
 
-## Rl_v67.py — test-time stochastic action averaging (inference-side variance reduction, no retraining)
+## Rl_v67.py — LOW PRIORITY / UNCERTAINTY PROBE — test-time stochastic action dispersion
 
-**Anchor.** Fork of **v18**. Single variable: at TEST time only, replace the single
-deterministic `predict(deterministic=True)` with the MEAN of `R` stochastic action samples per
-step (same trained policy, same weights, same LSTM state thread). Training is byte-identical to
-v18; this touches only `test_ppo_model`.
+**Anchor.** Fork of **v18**. Touches only `test_ppo_model`; training byte-identical to v18.
+**Reframed after advisor review (do NOT ship as a performance lever):** for v18's diagonal-
+Gaussian policy head, the deterministic action *is* the distribution mean, and the mean of `R`
+stochastic samples is just an unbiased *noisy* estimate of that same mean — so averaging
+samples and mapping once ≈ the deterministic action plus sampling noise, i.e. a near **no-op**
+(strictly weaker than deterministic). Averaging the raw actions cannot capture any
+action→env nonlinearity, because the env map is applied once, after the average. Its honest
+use is therefore as an **uncertainty / variance PROBE**, not a return improver.
 
-**Hypothesis.** A trained PPO policy still carries per-step action variance (its Gaussian head
-has non-trivial std even late in training — the batch diagnostics show std finishing at
-0.76–1.04). The deterministic action is the distribution mean, but the LSTM-conditioned mean
-itself is a noisy estimate near decision boundaries; averaging `R` stochastic samples
-("average-then-act", the empirically more stable ensemble read-out) smooths action selection
-and cuts the whipsaw that turns into over-trading. It is essentially free — no retraining, no
-new information — so it is a pure execution/variance lever, DISTINCT from v22 (train-time
-*seed* ensemble = R independent trainings) and v41 (SWA = weight averaging). It is the
-inference-time analogue of ensembling with ONE model.
+**Hypothesis (as a diagnostic, not a lever).** The per-step *dispersion* of the R sampled
+actions is a cheap read on where the trained policy is uncertain. High dispersion clustered
+around the whipsaw/over-trading episodes (INFY) would localize WHERE the policy is guessing —
+useful to target the real levers (v55 capacity, v63 noise, v50 rank-norm) rather than to lift
+returns directly. Distinct from v22 (train-time *seed* ensemble = R independent trainings) and
+v41 (SWA = weight averaging); those combine *different* models, this only re-samples ONE head.
 
 **Code change (single variable vs v18: test read-out only).**
 - `test_ppo_model`: per step, draw `R` samples via `predict(deterministic=False)` threading the
@@ -2285,15 +2306,16 @@ inference-time analogue of ensembling with ONE model.
 difference is the test read-out).
 
 **Diagnostic / caveat.**
-- **Modest, honest upside:** averaging a single policy's own samples reduces action noise but
-  cannot fix a mis-learned policy — expect a small smoothing effect, largest on the high-churn
-  stocks (INFY). If v18's deterministic std is already tiny on a stock, R-averaging ≈ the
-  deterministic action (no change) — that is the expected null, not a bug.
-- **Determinism / reproducibility:** seed the sampling so the test is repeatable; report R as
-  part of the config. Because it changes ONLY inference, it STACKS on any winning train-time
-  variant for free.
-- **Gate:** still must clear ≥20 trades (over-smoothing toward a flat action could suppress
-  trading — read the trade count) and is scored by the v37 selector.
+- **No-op risk is the headline (advisor):** because avg-of-samples ≈ the deterministic mean,
+  the test P&L should be within noise of v18. If it differs *materially*, suspect a bug (state
+  mismatch, unseeded sampling), not a real edge. Do NOT report a P&L delta here as a win.
+- **State/action mismatch (second-order):** threading the LSTM state from the deterministic
+  pass while applying an *averaged stochastic* action is a mild inconsistency — acceptable
+  only because avg≈deterministic; if ever reframed as a lever this must be fixed.
+- **Read the DISPERSION, not the return:** log per-step std of the R samples; that is the
+  intended output. Seed the sampling for reproducibility.
+- Ranked LOWEST of the batch — a diagnostic, not a challenger; does not go through the
+  ≥20-trade / v37-selector acceptance path.
 
 **Sources.** "Average-then-act" ensemble read-out is more stable than per-head greedy, and
 ensembles give ~1/K action-estimate variance reduction: Averaged-DQN (variance reduction by
