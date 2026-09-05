@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TCS
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,961.12
+Total Return: -0.39%
+Annualized Return: -0.13%
+Volatility (Annualized): 12.71%
+Sharpe Ratio: -0.010
+Maximum Drawdown: -18.68%
+Trading Days: 767
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹10,496.31
+Total Return: 4.96%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -0.39%
+Buy & Hold Return: 4.96%
+Outperformance: -5.35%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 64
+Buy Trades: 33
+Sell Trades: 31
+Total Transaction Costs: ₹1,327.73
+Average Cost per Trade: ₹20.75
+
+🎯 TRADING ACCURACY:
+Winning Trades: 23
+Losing Trades: 8
+Win Rate: 74.19%
+Total Closed Trades: 31
