@@ -126,10 +126,14 @@ baseline are unreliable directional screens. Consider reverting proxy to v18 106
 Best `mean_val_outperf_pp` on the 3-stock proxy panel. Set by auto-tinker; this is
 the leaderboard head from `log.md`, surfaced here for the other routines.
 
-| config | mean_val_outperf_pp | test | source commit |
-|---|---|---|---|
-| **22-indicator v26 curated (from AUDITED list), all other params at v18 defaults** | **-7.855** | -51.637 | 9c74acb (2026-09-01) |
-| v18 defaults (106 indicators) | -75.552 | -96.192 | — |
+**METRIC UPDATED 2026-09-05:** proxy now uses METRIC2_clip50 (clips per-stock outperf to ±50pp).
+Gate recalibrated to **25.69pp** (was 94.2pp). Target to beat: **+16.49pp**.
+
+| config | METRIC2_clip50 | METRIC (unclipped) | test | source |
+|---|---|---|---|---|
+| **22-indicator v26 curated, v18 hyperparams, SEED=42** | **-9.194** | -9.194 | -5.730 | baseline (b5363f6, 2026-09-05) |
+| ~~22-indicator (commit 9c74acb)~~ | ~~-7.855~~ | -7.855 | -51.637 | ⚠️ ARTIFACT: TATAMOTORS degenerate cash-hold. Do not build on this. |
+| v18 defaults (106 indicators) | -75.552 | -75.552 | -96.192 | — |
 
 ---
 

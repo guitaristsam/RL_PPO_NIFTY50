@@ -88,7 +88,13 @@ All experiments use SEED=42 unless noted. METRIC2 (clipped) is the keep/discard 
 
 | # | date (UTC) | change (one variable) | METRIC2 | METRIC | test | kept? | commit |
 |---|---|---|---|---|---|---|---|
-| *(experiments starting from ITC-16)* | | | | | | | |
+| ITC-21 | 2026-09-05 | gae_lambda 0.95→0.98 (longer advantage horizon) | -24.171 | -77.232 | -40.596 | DISCARD (−15.0pp vs baseline; HDFCBANK +0.49pp notable but RELIANCE collapsed) | — |
+| ITC-20 | 2026-09-05 | ent_coef 0.01→0.03 (moderate entropy increase) | -32.286 | -105.988 | -42.703 | DISCARD (−23.1pp vs baseline) | — |
+| ITC-19 | 2026-09-05 | batch_size 64→32 (more gradient noise) | -31.094 | -70.500 | -19.955 | DISCARD (−21.9pp vs baseline; RELIANCE/HDFCBANK collapse) | — |
+| ITC-18 | 2026-09-05 | vf_coef 0.5→0.25 (reduce critic weight) | -24.061 | -36.754 | -18.386 | DISCARD (−14.9pp vs baseline) | — |
+| ITC-17 | 2026-09-05 | net_arch [128]→[64], lstm=128 (decompose ITC-7 half-B) | -14.995 | -34.164 | -18.649 | DISCARD (−5.8pp; HDFCBANK−107pp; better than ITC-16 but still worse than baseline) | — |
+| ITC-16 | 2026-09-05 | lstm_hidden_size 128→64, net_arch=[128] (decompose ITC-7 half-A) | -30.874 | -114.011 | -21.221 | DISCARD (−21.7pp; RELIANCE/HDFCBANK collapse; lstm alone bad) | — |
+| ITC-M2CAL | 2026-09-05 | METRIC2 recalibration baseline (seed=42, 22 indicators, v18 hyperparams) | **-9.194** | -9.194 | -5.730 | **METRIC2 BASELINE** | b5363f6 |
 
 ### 2026-09-04 and earlier (METRIC/unclipped era, gate=94.2pp — all discard)
 
