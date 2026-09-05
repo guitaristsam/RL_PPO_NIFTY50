@@ -1,22 +1,29 @@
 # v20 Full Panel Readout — 2026-09-05
 
-## Verdict: REJECTED — worse than v18 baseline
+## ⚠️ REVISED VERDICT (2026-09-05): Null Result, Not a Rejection
 
-v18 remains PRODUCTION CHAMPION. v20 (best-by-Sharpe ValidationCallback) mean
-outperformance = **-71.58pp vs v18 -38.78pp** (32.8pp worse). Lost both v18 B&H-beating
-stocks (ITC, ADANIENT), added degenerate policies.
+**Original verdict (against biased baseline): REJECTED.** The v18 baseline used at time
+of first writing was pre-vecnorm-fix, inflated to -38.78pp. The correct v18 baseline
+(from a fresh clean run, `results_v18/`) is **-72.74pp**. Against the correct baseline:
+
+**v20 (-71.58pp) is +1.16pp better than v18 clean (-72.74pp) — indistinguishable.**
+
+The "lost ITC and ADANIENT winners" were pre-fix artifacts: ITC fresh v18 = -65.99pp
+(same as v20), ADANIENT fresh v18 = +4.12pp (53 trades, vs v20's 0-trade degenerate).
 
 ---
 
-## Summary
+## Summary (Corrected)
 
-| Metric | v18 (baseline) | v20 (best-by-Sharpe) | Delta |
-|--------|---------------|----------------------|-------|
-| Mean outperf vs B&H | **-38.78pp** | **-71.58pp** | **-32.8pp worse** |
-| Beats B&H count (genuine) | 2/10 (ITC, ADANIENT) | 0/10 | -2 winners |
-| Average Sharpe | +0.15 | +0.02 | worse |
-| Degenerate stocks (<20 trades) | 0 | 2 (ADANIENT 0, TATAMOTORS 5) | worse |
-| Avg trade count | ~109 | 94.3 | fewer |
+| Metric | v18 clean (correct) | v20 (best-by-Sharpe) | Delta |
+|--------|---------------------|----------------------|-------|
+| Mean outperf vs B&H | **-72.74pp** | **-71.58pp** | **+1.16pp** (≈ 0) |
+| Beats B&H count (genuine) | 1/10 (ADANIENT +4pp) | 0/10 | -1 |
+| Degenerate stocks (<20 trades) | 1/10 (TATAMOTORS 5) | 2/10 | +1 worse |
+| Avg trade count | 84.3 | 94.3 | similar |
+
+**Net: v20 essentially matches v18. ADANIENT degeneracy (0 trades in v20 vs 53 in v18)
+is v20's one genuine disadvantage. Best-by-Sharpe is selecting the cash-hold checkpoint.**
 
 ---
 
