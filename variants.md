@@ -2336,11 +2336,29 @@ overfitter (EV 0.95–0.99 on train, poor test; val decays past 100k), so attack
 and input covariate-shift *directly* on the regularization axis — where v55–v57 only moved the
 *width* axis and did so symmetrically across both heads.
 
-Advisor priority: **v68 (LayerNorm) ≈ v69 (critic-only capacity) > v70 (frac-diff, highest
-ceiling) > v71 (spectral norm) > v72 (CVaR, HOLD).** Two ideas were considered and **rejected**
-this session (see the "Considered and rejected" note at the end of this batch) so no future
-session re-drafts them: actor/recurrent LSTM dropout (PPO-unsafe) and potential-based reward
-shaping (policy-invariant ⇒ inert, or misspecified ⇒ a v19 duplicate).
+Advisor priority (pre-PR pass promoted v69 over v68 — v69 is the direct *asymmetric* extension of
+the one confirmed signal, v55 symmetric shrink, applied to the exact organ the diagnosis names,
+and a one-line change; v68's own caveat concedes LayerNorm-alone is *inconsistent on
+generalization*): **v69 > v68 > v70 (highest ceiling but largest edit / mandatory leakage gate) >
+v71 (regularization-family, elevated clip-collapse risk) > v72 (CVaR, HOLD).** Two ideas were
+considered and **rejected** this session (see the "Considered and rejected" note at the end of
+this batch) so no future session re-drafts them: actor/recurrent LSTM dropout (PPO-unsafe) and
+potential-based reward shaping (policy-invariant ⇒ inert, or misspecified ⇒ a v19 duplicate).
+
+**Note — three correlated bets on ONE axis.** v68, v69, and v71 all attack the same
+critic-normalization / effective-capacity axis. They are alternatives to screen in priority order,
+NOT five independent shots: if v69 (or v68) already drops train EV below 0.99 and flattens the
+val decay, v71 is a redundant second option, not a stack (running two at once = two variables).
+
+**Acceptance guardrail for ALL of v68–v72 (run-routine, read this).** "beats v18" means beats it
+under the **v37 exposure-adjusted-alpha selector**, and the load-bearing check is NOT the ≥20-trade
+count alone (gameable — a policy can churn in/out at ~0 net exposure, clear 20 flips, and still be
+a no-conviction artifact like v26). The real gate is `min_trades ≤ flips ≤ max_trades AND
+mean_exposure ≥ 0.15`, scored by exposure-adjusted active return (a cash-hold's active return → 0
+by construction). **Caveat: v37 is itself DESIGN-ONLY / UNRUN** ("MEASUREMENT-INTEGRITY
+PREREQUISITE"). Until v37 lands, the run-routine MUST apply the exposure-floor + churn-ceiling
+check post-hoc; a raw mean-outperf "win" without it is not acceptable (that is exactly how v26
+produced a fake B&H-beat).
 
 ---
 
