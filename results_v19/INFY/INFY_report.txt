@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR INFY
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹9,428.42
+Total Return: -5.72%
+Annualized Return: -1.35%
+Volatility (Annualized): 18.15%
+Sharpe Ratio: -0.075
+Maximum Drawdown: -36.07%
+Trading Days: 1089
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹12,249.93
+Total Return: 22.50%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -5.72%
+Buy & Hold Return: 22.50%
+Outperformance: -28.22%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 79
+Buy Trades: 44
+Sell Trades: 35
+Total Transaction Costs: ₹1,715.13
+Average Cost per Trade: ₹21.71
+
+🎯 TRADING ACCURACY:
+Winning Trades: 25
+Losing Trades: 10
+Win Rate: 71.43%
+Total Closed Trades: 35

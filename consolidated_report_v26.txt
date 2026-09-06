@@ -1,0 +1,76 @@
+
+================================================================================
+PORTFOLIO PERFORMANCE REPORT (NIFTY50 STOCKS)
+================================================================================
+
+Stocks Processed: 9 out of 50
+Initial Investment: ₹90,000.00
+Final Portfolio Value: ₹116,519.97
+Buy & Hold Value: ₹170,265.58
+Total Transaction Costs: ₹9,451.48
+
+Portfolio Return: 29.47%
+Buy & Hold Return: 89.18%
+Outperformance: -59.72%
+
+Overall Win Rate: 68.80%
+Total Closed Trades: 250
+Winning Trades: 172
+Losing Trades: 78
+
+Per Stock Results:
+--------------------------------------------------
+RELIANCE:
+  Final Value: ₹9,620.54
+  Buy&Hold: ₹16,783.10
+  Win Rate: 20.00%
+  Transaction Costs: ₹182.98
+
+INFY:
+  Final Value: ₹10,694.27
+  Buy&Hold: ₹12,199.05
+  Win Rate: 66.67%
+  Transaction Costs: ₹1,060.68
+
+TATAMOTORS:
+  Final Value: ₹20,202.80
+  Buy&Hold: ₹35,097.01
+  Win Rate: 100.00%
+  Transaction Costs: ₹285.20
+
+ITC:
+  Final Value: ₹15,260.34
+  Buy&Hold: ₹21,372.22
+  Win Rate: 80.56%
+  Transaction Costs: ₹1,591.35
+
+HDFCBANK:
+  Final Value: ₹13,459.41
+  Buy&Hold: ₹13,239.53
+  Win Rate: 100.00%
+  Transaction Costs: ₹74.34
+
+TCS:
+  Final Value: ₹9,718.86
+  Buy&Hold: ₹10,599.62
+  Win Rate: 77.50%
+  Transaction Costs: ₹1,604.93
+
+SBIN:
+  Final Value: ₹12,610.74
+  Buy&Hold: ₹18,871.98
+  Win Rate: 71.43%
+  Transaction Costs: ₹1,377.86
+
+AXISBANK:
+  Final Value: ₹11,406.70
+  Buy&Hold: ₹14,953.27
+  Win Rate: 64.00%
+  Transaction Costs: ₹1,045.35
+
+HINDALCO:
+  Final Value: ₹13,546.30
+  Buy&Hold: ₹27,149.80
+  Win Rate: 58.33%
+  Transaction Costs: ₹2,228.80
+
