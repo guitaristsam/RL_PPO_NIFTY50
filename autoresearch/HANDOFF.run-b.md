@@ -41,13 +41,19 @@ All four assigned variants are now done. v18 remains production champion.
 - **DO NOT start new runs** — other session is running v29
 - PR #3 updated with full v23 analysis
 
-## Concurrent Session (v29)
+## Concurrent Session (v29) — IN PROGRESS
 
-Another nightly wave-2 session started v29 (DD penalty lambda=0) at ~23:25 UTC.
-v29 is the highest-priority live experiment — directly targets the beta gap.
-- Results will appear in `results_v29/`
-- Rl_v29.py is committed on this branch
-- This session's data (v23 complete) does not conflict
+v29 panel (DD penalty lambda=0) started ~23:25 UTC. Panel running, watcher script commits each stock as it completes.
+
+**Progress as of ~00:00 UTC:**
+- RELIANCE: -47.17pp (v18: -76.93pp, **+29.76pp lift**)
+- INFY: -47.11pp (v18: -39.50pp, -7.61pp regression)
+- TATAMOTORS: training (~87k/200k steps at 00:00 UTC)
+- ITC through HINDALCO: queued
+
+**Key diagnostic**: TATAMOTORS had 5 degenerate trades in v18 (-257.93pp). If trade count >20 in v29, DD penalty removal fixed the beta gap.
+
+After panel: analytics → READOUT.md → ADVISOR boundary (b) → PR update.
 
 ## Key Findings This Run-B Campaign
 
