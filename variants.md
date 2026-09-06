@@ -2678,3 +2678,297 @@ ICML 2022, https://proceedings.mlr.press/v162/lyle22a/lyle22a.pdf ; generalizati
 model-selection / early-stopping signal (flat-minima & train-val divergence),
 https://www.emergentmind.com/topics/generalization-gap ; "Train longer, generalize better,"
 NeurIPS 2017, http://papers.neurips.cc/paper/6770-train-longer-generalize-better-closing-the-generalization-gap-in-large-batch-training-of-neural-networks.pdf .
+
+---
+
+## Rl_v74.py — learning-rate COSINE-decay schedule (optimization-trajectory anti-overfit)  [DRAFTED, UNRUN]
+
+**Hypothesis.** The diagnosed disease is a generalization gap whose signature is
+"val return peaks around 100k timesteps, then DECAYS with more training" while train
+EV pegs at 0.95–0.99. A CONSTANT learning rate keeps taking full-size gradient steps
+through the whole run. Annealing the LR reshapes the optimization *trajectory*: full
+step size early (preserve exploration/plasticity), shrinking late. **Honest scoping
+(advisor, 2026-09-06):** the val callback ALREADY restores the best-val (~100k)
+checkpoint, so "avoiding late decay" is largely neutralized at deployment — v74 cannot
+win on that path. Its only real win path is producing a *better peak checkpoint* via
+smoother convergence into ~100k. That is why v74 uses **cosine, not linear**: linear
+has annealed to ~1.5e-4 by the peak region (adjacent to the already-rejected constant
+1e-4), whereas cosine holds the LR high through the region where the winning checkpoint
+is actually selected, so more of its distinct behavior lands on the deployed model.
+
+**Distinctness (why this is NOT a re-run of the rejected LR tweaks).** The tinker
+screen already DISCARDED constant lr=1e-3 and lr=1e-4 (log.md ITC-era). Those change
+the *height* of a flat LR line — a different constant, same shape. v74 changes the
+*shape*: full 3e-4 early (preserves the exploration/plasticity that a flat 1e-4 kills)
+and →0 late (kills the memorization a flat 3e-4 permits). No prior experiment touched
+the LR *trajectory*. This also composes cleanly with the one real signal (symmetric
+capacity 128→64, v55): capacity and optimization-trajectory are orthogonal axes.
+
+**Code change (single variable vs v18: the learning_rate argument).**
+- `train_ppo_model` (Rl_v18.py:756, `PPO_PARAMS`): replace `"learning_rate": 3e-4`
+  with an SB3 schedule callable
+  `_cosine_lr(progress_remaining) = 3e-4 * 0.5 * (1 + cos(pi * (1 - progress_remaining)))`
+  (SB3 passes `progress_remaining` from 1.0 at the first update to 0.0 at the last;
+  this gives 3e-4 at start, 1.5e-4 at the midpoint, 0 at the end). A linear variant
+  (`3e-4 * progress_remaining`) is the obvious follow-up single-variable if cosine wins.
+- Nothing else changes — n_steps/batch/epochs, clip_range, ent_coef, policy_kwargs,
+  reward, callback, splits, `list_of_indicators` all byte-identical → no audit edit.
+- **DRAFTED as `Rl_v74.py`, UNRUN, AST-clean.** `python run_panel.py v74` works via importlib.
+
+**How to run.** `python run_panel.py v74` (full 10-stock panel). Compare against v18 by
+per-stock outperformance and, crucially, by the validation-curve shape.
+
+**Diagnostic to look for.**
+- **Primary:** does the val curve stop decaying after ~100k? Log the ValidationCallback
+  `eval_history` (timestep, val_return). If v74's best checkpoint lands *later* (150k–200k)
+  than v18's on the known overfitters (INFY, HDFCBANK) yet generalizes as well or better,
+  the decay was optimization-driven and v74 fixed it.
+- **Training EV:** if end-of-training EV drops below v18's 0.95–0.99, the smaller late
+  steps reduced train memorization (the intended effect).
+- **Guardrail:** watch `clip_fraction` — it will naturally fall as LR→0 late; that is
+  EXPECTED here (steps shrink), NOT the v10-DSR pathology (which collapsed clip_fraction
+  from step 1 with a full LR). Judge clip_fraction in the *early* phase, where it should
+  match v18.
+- Highest-priority reads: INFY and HDFCBANK (the two clearest late-training overfit
+  casualties in CLAUDE.md).
+
+**Honest risk (advisor, 2026-09-06).** This is the *safest* of tonight's batch but also
+the most LEVERAGE-CAPPED. Because best-val restore already deploys the ~100k checkpoint,
+v74's back half mostly repaints checkpoints that are discarded anyway; its distinct win
+must come from a better *peak*, which is a smaller upside than a fresh anti-overfit axis.
+Run it because it is nearly free (one param), not because it is expected to clear the
+significance gate on its own. If the gap is driven by the *feature/data* ceiling rather
+than the optimization trajectory, cosine decay tightens the val curve without moving
+test alpha — still a useful diagnostic (isolates optimization- vs data-driven overfit).
+Advisor ranked this BELOW v75 (target_kl) and below the v77 episode-sampler; it is a
+cheap side-run, not the headline.
+
+**Sources.** SB3 PPO `learning_rate` accepts a `progress_remaining`→lr schedule,
+https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html ; LR decay reduces
+late-training overfitting / improves generalization,
+https://www.geeksforgeeks.org/machine-learning/learning-rate-decay/ ; "Normalization and
+effective learning rates in reinforcement learning," https://arxiv.org/pdf/2407.01800
+(effective-LR control as an RL plasticity/overfit lever).
+
+---
+
+## Rl_v75.py — PPO target_kl adaptive early-stopping of the epoch loop  [DRAFTED, UNRUN]
+
+**Hypothesis.** PPO's clip_range bounds the per-sample ratio but does NOT bound the
+*aggregate* policy movement per rollout: across `n_epochs=5` passes the mean KL between
+old and new policy can drift far, and that aggregate drift late in training is where the
+policy overfits the rollout it just collected. `target_kl` makes SB3 abort the epoch loop
+for an update once mean approx-KL exceeds the target — an ADAPTIVE trust region that
+tightens exactly when the update is trying to move too far, and leaves well-behaved
+updates untouched. This caps late-training memorization on the axis clip_range cannot
+reach, without changing capacity, features, or reward.
+
+**Distinctness (why this is NOT a re-run of the rejected clip_range tweaks).** The
+tinker screen DISCARDED fixed clip_range 0.1/0.15/0.3. Those set a *static per-sample*
+ratio bound applied uniformly to every update. `target_kl` is a *dynamic aggregate*
+KL bound that early-stops the epoch loop per-update based on the realized divergence —
+a fundamentally different control point (SB3 docs: "the clipping is not enough to prevent
+large updates"). It also does not reduce the effective step count on updates that stay
+within trust region, so it is gentler than simply cutting n_epochs (also rejected, 5→3).
+
+**Code change (single variable vs v18: add one kwarg).**
+- `train_ppo_model` (Rl_v18.py:756, `PPO_PARAMS`): add `"target_kl": 0.02`.
+- Everything else byte-identical to v18 (learning_rate, clip_range, n_epochs, policy_kwargs,
+  reward, callback, splits, features) → no audit edit.
+- **DRAFTED as `Rl_v75.py`, UNRUN, AST-clean.** `python run_panel.py v75` works via importlib.
+
+**How to run.** `python run_panel.py v75` (full 10-stock panel).
+
+**Diagnostic to look for.**
+- **Primary:** the number of epochs actually run per update should fall below 5 in LATE
+  training (the loop early-stops) while staying near 5 early. SB3 logs
+  `train/n_updates` and the KL; if it never early-stops, target_kl=0.02 is too loose —
+  the follow-up single-variable sweep is 0.015 / 0.01.
+- Val-curve shape: as with v74, look for reduced decay past 100k on INFY / HDFCBANK.
+- **Guardrail:** if target_kl is too tight, the policy under-trains (std stays high, few
+  effective updates, degenerate low-trade policy). Enforce the ≥20-trade genuineness gate;
+  a policy that goes quiet is a target_kl-too-tight signal, not a win.
+
+**Honest risk (advisor, 2026-09-06 — ranked this the #1 optimization-side lever to run first).**
+Two specific failure modes to watch, beyond the generic "shares the data-side ceiling":
+1. **May not bind.** With `n_epochs=5` already low, the per-update mean KL may routinely
+   stay under 0.02, so the gate rarely fires → partial no-op. If SB3's KL log shows it
+   never early-stops, that is itself informative (the actor is not the runaway component)
+   — and the follow-up is target_kl=0.01, then 0.015, each still one variable.
+2. **Peak may leave the eval grid.** If target_kl genuinely slows learning, the val peak
+   can shift PAST 200k, outside v18's 100k/150k/200k eval grid, so the callback saves a
+   still-rising checkpoint and undersells the variant. Read the val curve at 200k: if it
+   is still climbing, the honest re-run extends the budget (or adds a 250k eval) — note
+   this is then a SECOND variable, so report it as a separate confirmation, not the v75
+   result. Otherwise overlaps in *spirit* with v55/v68/v69 but on a distinct control
+   point (aggregate KL per update); cheap enough to be worth the one panel run.
+
+**Sources.** SB3 PPO `target_kl` — "Limit the KL divergence between updates, because the
+clipping is not enough to prevent large updates ... will stop training if the KL
+divergence [exceeds the target]," https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html .
+
+---
+
+## Rl_v76.py — DESIGN ONLY — fully DECOUPLE (unshare) the actor/critic post-LSTM MLP head
+
+**Hypothesis.** v18 sets `net_arch=[128]` as a plain list, which in SB3 on-policy algos
+means the post-LSTM MLP is SHARED between the actor and the critic (only the LSTMs are
+already separate via `shared_lstm=False, enable_critic_lstm=True`). A shared trunk lets
+the critic's overfitting (EV→0.99) contaminate the policy representation — the exact
+mechanism the "Decoupling Value and Policy for Generalization" (DAAC/IDAAC, Raileanu &
+Fergus 2021) line of work identifies as a primary generalization killer in actor-critic
+RL. Fully unsharing the MLP head (`net_arch=dict(pi=[128], vf=[128])`) gives the policy
+its own representation that is not dragged toward memorizing returns.
+
+**Distinctness (vs v69).** v69 sets `net_arch={"pi":[128],"vf":[64]}` — it CONFOUNDS two
+changes: unsharing AND shrinking the critic. v76 isolates the *decoupling* variable alone
+(both heads stay width 128, only the sharing is removed). Per the project's single-
+variable discipline (v10/v11 taught that two simultaneously-positive changes can offset),
+v76 is the cleaner primitive; run it to attribute any v69 gain to decouple-vs-shrink.
+Also distinct from v55 (symmetric shrink of a still-shared trunk).
+
+**Code change (single variable vs v18: net_arch sharing).**
+- `train_ppo_model` `PPO_PARAMS["policy_kwargs"]` (Rl_v18.py:777): `"net_arch": [128]`
+  → `"net_arch": {"pi": [128], "vf": [128]}`.
+- Nothing else changes. `list_of_indicators` untouched → no audit edit.
+
+**How to run.** `python run_panel.py v76` (once DRAFTED — trivial one-line copy of v18).
+
+**Diagnostic to look for.**
+- Train EV should stay high on the critic head, but the *gap* between train and test
+  return should narrow if the policy head is no longer contaminated. Compare test
+  outperformance vs both v18 (shared) and v69 (unshared+shrunk) to decompose the axis.
+- If v76 ≈ v18 but v69 > v18, the gain is from SHRINKING the critic, not unsharing — so
+  double down on capacity (v55/v56/v57), not decoupling. If v76 > v18, decoupling is the
+  active ingredient and IDAAC-style value-detachment becomes the next fork.
+
+**Why DESIGN ONLY.** Gated behind v69's panel result: if v69 is run first and loses, the
+decouple axis is dead and v76 is not worth a run; if v69 wins, v76 is the *required*
+attribution experiment. Sequencing it avoids spending two panel runs before learning
+which half of v69 mattered.
+
+**Sources.** Raileanu & Fergus, "Decoupling Value and Policy for Generalization in
+Reinforcement Learning," ICML 2021, https://arxiv.org/pdf/2102.10330 ; SB3 custom
+network `net_arch=dict(pi=[...], vf=[...])` for separate policy/value MLPs,
+https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html ; critic
+overfitting worsens as actor/critic share representation (FinRL generalization-gap /
+regime-divergence findings), https://arxiv.org/html/2504.02281v3 .
+
+---
+
+## Rl_v77.py — random-start, fixed-length episode windows within the single-stock train split (DATA-DIVERSITY anti-overfit) — advisor's #1 missing lever  [DESIGN, high priority]
+
+**Hypothesis (advisor, 2026-09-06 — the single highest-value single-variable lever not
+yet in the queue).** Today each stock trains as ONE ~1750-bar episode traversed ~114×
+over 200k steps. That repetition of a single realized price path IS the overfit engine —
+it is the root cause every optimization knob (LR, KL, clip, capacity) can only dampen
+downstream, which is why the one real signal (128→64) is stuck under the significance
+gate. Change ONE thing: on each `reset()`, sample a random contiguous window
+`[start, start+L)` (e.g. L=252 trading days) inside the TRAIN split and start the episode
+there, instead of always starting at t0 and running the full split. This maximizes
+per-gradient-step data diversity while preserving REAL local autocorrelation and
+microstructure — it is the data-diversity sibling of the confirmed capacity-reduction
+win (the two classic generalization-gap fixes are "fit less" and "see more diverse
+data"; the project has only pulled the first).
+
+**Distinctness.**
+- vs **v43** (stationary block-bootstrap): v43 STITCHES synthetic returns and destroys
+  real autocorrelation/microstructure. v77 keeps real contiguous windows — no synthesis.
+- vs **v24/v45** (pooled): those sample random windows ACROSS stocks (a different
+  variable — cross-stock generalization). v77 stays single-stock, in the v18 lineage, so
+  it is directly comparable to v18 per-stock.
+- vs the whole optimization batch (v74/v75/v55/v68/v69/v71): those regularize the fit;
+  v77 changes the DATA the fit sees. Orthogonal and stackable under any of them.
+
+**Code change (single variable vs v18: the episode sampling scheme).** Env-side only, in
+`IntegerTradingEnv` (Rl_v18.py:383+). Two hooks:
+- `reset()` (Rl_v18.py:424): after `super().reset()`, draw `start` from a dedicated
+  `np.random.default_rng` over `[0, N_train - L]` (N_train = number of unique train
+  dates), then set `self.day = start`, `self.data = self.df.loc[self.day, :]`, rebuild
+  `self.state = self._initiate_state()`, and reset `self._equity_peak` and the
+  drawdown-max bookkeeping. Store `self._episode_end = start + L`.
+- `step()` (Rl_v18.py:470): after `super().step(...)`, OR the episode-length cap into the
+  done flag — `if self.day >= self._episode_end: terminated = True` — so the episode ends
+  after L bars regardless of FinRL's full-split terminal. VecEnv auto-resets, drawing a
+  new random window.
+- Training budget, reward, callback, splits, features, ALL hyperparameters, and the VAL
+  and TEST paths are UNCHANGED — validation/test still run the FULL contiguous val/test
+  window (only TRAIN episodes are windowed). `list_of_indicators` untouched → no audit edit.
+
+**How to run.** `python run_panel.py v77` once DRAFTED. Full panel; compare per-stock
+outperformance and val-curve shape vs v18.
+
+**Diagnostic to look for.**
+- **Primary:** does the train↔test gap NARROW? Train EV should still be high per window,
+  but test outperformance vs v18 is the read. If val stops decaying past 100k AND test
+  improves, data-diversity was the binding constraint.
+- **Priority reads:** INFY, HDFCBANK (clearest overfit casualties), and the trend stocks
+  RELIANCE/TATAMOTORS (windowing exposes the policy to more regime slices).
+
+**Gotchas / honest risk (advisor + env-safety).**
+- **L is a new hyperparameter.** Keep **L ≥ 252** so the v12/v18 drawdown penalty still
+  has a meaningful horizon (DD baseline resets per window). L too short shortens
+  credit-assignment and can trivialize the reward; L too long → back toward v18. Start
+  L=252; an L sweep (126 / 378 / 504) is the follow-up, each still one variable.
+- **Genuineness gate.** Verify the resulting policy still makes **≥20 trades/stock** on
+  test — windowing must not degenerate into the v26 cash-hold trap. If trade count
+  collapses, that is a failure, not a win.
+- **Env correctness is the real cost.** This touches `reset()`/terminal — the exact
+  surface of every "bug already paid for" in CLAUDE.md (state layout, off-by-one date
+  alignment). DRAFTING requires the `V24_LOG_RESETS`-style smoke test (verify `self.day`
+  starts at the sampled index, state matches that day's prices, episode terminates after
+  exactly L bars, VecNormalize stats still populate). Left DESIGN-only for a session that
+  can run that smoke test; do NOT ship without it.
+- **Reproducibility.** Use a dedicated RNG seeded off the global seed so runs are
+  reproducible (mirror v24's `PooledTradingEnv` dedicated `default_rng`).
+
+**Sources.** Domain randomization / diverse start-states as the canonical RL
+generalization-gap fix, https://www.emergentmind.com/topics/generalization-in-deep-reinforcement-learning ;
+Cobbe et al., "Quantifying Generalization in Reinforcement Learning" (training on more
+diverse levels closes the gap; value loss rises with generalization),
+https://arxiv.org/abs/1812.02341 ; FinRL generalization-gap driven by regime divergence
+(more regime exposure in training helps), https://arxiv.org/html/2504.02281v3 .
+
+---
+
+## METHODOLOGY (not a model variant) — v78: k-seed ENSEMBLE-MEAN as the unit of comparison (measurement power to PROMOTE v55)
+
+**Problem (advisor, 2026-09-06).** The project's ONE real empirical signal — symmetric
+capacity 128→64 (v55) — is not absent, it is **stuck UNDER the significance gate** at
++9…+12pp across two independent single-seed screens. When a genuine ~10pp effect cannot
+clear the gate, the limiting resource is **measurement power, not ideas**. Chasing a
+bigger lever is the wrong move if a real one is being lost to seed noise.
+
+**Change (one variable: the comparison protocol, not the model).** Make the unit of
+comparison a **k-seed ensemble MEAN (k=5)** rather than a single seed. For each config
+(v18 baseline and the challenger), train k=5 seeds, and compare the *mean* per-stock
+outperformance with its across-seed standard error. A true ~10pp effect has its noise
+band shrink ~√k, so it can clear the gate that a single noisy seed cannot.
+
+**Distinctness (why this is NOT v22).** v22 ensembles at INFERENCE — it averages k
+policies' continuous actions to build a *better deployed model*. v78 is a *statistical
+comparison protocol*: k seeds are trained and each evaluated independently; we compare
+the distribution of single-seed test outcomes, not a merged policy. v22 changes the
+product; v78 changes the yardstick. They are compatible (one could report both).
+
+**How to run.** No new file. Extend `run_panel.py` / `significance.py` to loop
+`seed_offset ∈ {0..4}` per config (v22 already exposes `seed_offset`; reuse that
+plumbing on a v18-lineage config), then aggregate mean ± SE across seeds per stock and
+apply the existing Newey-West / bootstrap significance machinery to the seed-mean series.
+
+**First application (highest value).** Re-screen **v55 (128→64)** as a 5-seed mean vs a
+5-seed v18 baseline on the full panel. If the +9…+12pp signal survives as a seed-mean
+with SE small enough to clear the gate, v55 is PROMOTED to production challenger — the
+cheapest path to advancing the frontier tonight, ahead of any new lever. Second
+application: use the same 5-seed protocol for v74/v75/v77 so a real but modest
+optimization-side effect is not lost to seed noise.
+
+**Honest caveat.** 5× the compute per config. Spend it on the ONE candidate most likely
+to be a real-but-under-gate effect (v55) first, not on every variant. This is a
+throughput/measurement decision for the run routines, logged here so it is not re-derived.
+
+**Sources.** Agarwal et al., "Deep Reinforcement Learning at the Edge of the Statistical
+Precipice," NeurIPS 2021 (report interval estimates over many seeds; single-seed
+point comparisons are unreliable), https://arxiv.org/abs/2108.13264 ; Henderson et al.,
+"Deep Reinforcement Learning that Matters," AAAI 2018 (seed variance dominates RL result
+claims), https://arxiv.org/abs/1709.06560 .
