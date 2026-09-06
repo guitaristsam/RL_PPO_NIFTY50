@@ -66,8 +66,61 @@ Validate on proxy panel (auto-tinker) then full panel (auto-run).
 
 ---
 
+## [OPEN] 2026-09-06 — Cost Drag Confirmed as Root Cause (run-b, Opus advisor)
+
+**Transaction costs are 15.2% of initial capital on average across the 10-stock panel.**
+
+Per-stock breakdown from `results_v18/*/trades.csv`:
+| Stock | Trades | Cost/Initial |
+|-------|--------|-------------|
+| ITC | 129 | 31.4% |
+| RELIANCE | 139 | 27.5% |
+| SBIN | 98 | 20.3% |
+| HINDALCO | 181 | 16.1% |
+| AXISBANK | 69 | 14.1% |
+| TCS | 64 | 13.3% |
+| HDFCBANK | 46 | 10.9% |
+| INFY | 59 | 9.3% |
+| ADANIENT | 53 | 7.9% |
+| TATAMOTORS | 5 | 1.0% |
+| **Mean** | **84** | **15.2%** |
+
+Win rates are 56-87% per stock but returns are near-zero. Costs alone explain ITC's
+entire −66pp gap. The advisor (Opus, 2026-09-06) assessment: **cost drag is the binding constraint,
+not reward shaping or overfit.**
+
+**Corrected v27 recommendation (SUPERSEDES "start fully invested"):**
+Advisor says start-fully-invested only sets t=0; the policy sells down by day 3 — it
+attacks the symptom, not the cause. Real fix:
+
+**v27 = action deadband + minimum hold:**
+- `|action_shares| < 0.1*hmax → 0` (no trade if tiny)  
+- minimum-hold: skip trade if position changed < 3 bars ago
+- This directly cuts turnover by 50-70%, saving ~8-10pp of cost drag
+
+**v28 = turnover penalty in reward:** `reward -= λ * cost_t / eq_t`
+
+**Action needed:**
+1. Implement `Rl_v27.py` with action deadband + minimum-hold (single-variable from v18)
+2. Validate proxy panel (auto-tinker) then full panel (auto-run)
+3. Update `NEEDS_HUMAN.md [OPEN] 2026-09-05 v27` as superseded
+
+---
+
+## [SUPERSEDED — 2026-09-06] 2026-09-05 — Next Experiment Design: v27 "Start Fully Invested"
+
+**Superseded by action deadband recommendation above.** "Start fully invested" was
+advisor's first proposal but is now assessed as attacking t=0 only (policy sells down
+by day 3). Action deadband directly attacks the 15pp ongoing cost drag.
+
+---
+
 ## [RESOLVED — informational] 2026-09-05 — v27 Turnover Penalty (SUPERSEDED)
 
 Original proposal: `reward -= λ * (traded_value / equity)`. Superseded by advisor
 recommendation to instead fix the starting-position problem. Turnover penalty reduces
 trading further, pushing toward cash (wrong direction for beta gap problem).
+
+**2026-09-06 UPDATE:** New advisor says turnover penalty in reward IS worth trying
+as v28 (after v27 action deadband). Reward penalty changes the objective; deadband
+changes the action space. Both are worth trying, deadband first.
