@@ -19,7 +19,7 @@ _Last session: 2026-09-06 (UTC). Fresh cold-resume every fire — read this FIRS
 
 ## What I shipped this session (on auto/research; commits after 30df650)
 
-variants.md now runs through **v72**. New batch v68–v72, all single-variable vs **v18**, ranked by
+variants.md now runs through **v73**. New batch v68–v72 (+ v73 selector, added post-advisor-b), all single-variable vs **v18**, ranked by
 an independent opus advisor (boundary-a). Theme: attack the diagnosed overfitting-critic
 (EV 0.95–0.99, val decay past 100k) on the regularization / input-covariate-shift axes — where
 v55–v57 only moved the *width* axis, symmetrically across both heads.
@@ -47,6 +47,12 @@ v55–v57 only moved the *width* axis, symmetrically across both heads.
 - **v72** CVaR/expected-shortfall reward penalty. DESIGN-ONLY / HOLD. Distinct from rejected DSR
   (no exploding denominator) & fixed DD. Advisor skeptical: reward-shape ≠ the generalization
   disease; run only if a reward lever becomes the bottleneck, and only AFTER v68–71.
+- **v73** generalization-gap-minimizing checkpoint selector (added post-advisor-b, SELECTION axis,
+  the #2 blocker). Every prior selector (v20/v29/v37/v38/v41) picks by a val *level*; v73 picks by
+  train↔val *agreement*: score = val_metric − β·max(0, train_metric − val_metric). Directly
+  operationalizes the EV-gap diagnosis; orthogonal/stackable under any reward or feature winner.
+  MUST keep v37 exposure-floor + churn as a HARD eligibility filter first (else a cash-hold wins on
+  gap≈0). No list_of_indicators change. Lyle et al. ICML 2022.
 
 **KILLED this session (do NOT re-draft — recorded in variants.md "Considered and REJECTED"):**
 - actor / recurrent (variational) LSTM dropout — PPO-UNSAFE: dropout in the policy net makes the

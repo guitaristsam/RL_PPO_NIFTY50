@@ -2616,3 +2616,65 @@ with CVaR," https://arxiv.org/pdf/2405.01718 ; "Risk-Sensitive Reward-Free RL wi
   The only way it "helps" is by misspecifying the potential (non-zero terminal potential / not a
   true difference form), at which point it is no longer policy-invariant and is simply
   **v19 (B&H-relative reward) in disguise**. Either inert or a duplicate — dropped.
+
+---
+
+## Rl_v73.py — generalization-gap-minimizing checkpoint selector (train↔val agreement)  [QUEUE — selection axis]
+
+**Anchor.** Fork of **v18**. Single variable: change ONLY the checkpoint-selection *criterion* in
+`ValidationCallback`. v18 (and every prior selector variant) picks the checkpoint by a **val
+score**; v73 picks the checkpoint whose **train and val performance agree most** — explicitly
+penalizing the train↔val generalization gap. Reward, features, action space, hyperparameters,
+warmup, and eval cadence are all v18. Added post-advisor-b as a clearly-distinct selection-axis
+idea within the same vetted theme (see PR addendum).
+
+**Hypothesis.** The project's disease has a precise, measured signature: the checkpoint that looks
+best on a held-in window generalizes poorly (train critic EV 0.95–0.99; val peaks ~100k then
+decays; lucky-long val winners like INFY@200k that collapse on test). Every existing selector
+still optimizes a *level* on one held-out slice (v20 val-Sharpe, v29 val across subwindows, v37
+exposure-adjusted val alpha, v38 CPCV val, v41 SWA of top-val checkpoints) — so all of them can
+still crown an overfit checkpoint that happens to score high on that slice. v73 instead uses the
+**gap itself as the selection signal**: run the deterministic policy through BOTH the train slice
+and the val slice at each eval, and prefer the checkpoint that is good on val *and* whose train
+score does not tower over its val score. The RL learning-dynamics literature (Lyle et al. 2022)
+shows train performance and generalization decouple as training proceeds; selecting for small
+train↔val divergence is the direct operationalization of "stop before the critic memorizes." This
+is a *selection* lever (the project's #2 blocker), orthogonal to and stackable under any *reward*
+or *feature* winner.
+
+**Distinctness.** No prior selector scores by train↔val *agreement* — they all score by a val
+*level*. v37 fixes the *metric* (exposure-adjusted alpha, anti-cash-hold) and v38/v29 fix the
+*window* (more of val); v73 fixes the *objective* (gap, not level) and is composable with both:
+the ideal is v73's gap objective computed on v37's exposure-adjusted metric over v38's windows.
+
+**Code change (single variable vs v18: selection criterion).**
+- `ValidationCallback._on_step` (~Rl_v18.py:586+): at each eligible eval, in addition to the
+  existing val rollout, run the SAME deterministic policy through the **train** slice and compute
+  the same return metric. Replace `best_return` bookkeeping with a gap-aware objective:
+  `score = val_metric - beta * max(0.0, train_metric - val_metric)` (beta≈0.5–1.0), and save the
+  checkpoint that maximizes `score` (subject to the existing warmup + the exposure/churn gate).
+  `beta` is the ONE change's constant. Everything else in the callback (warmup=100k, cadence,
+  restore-best-at-end) unchanged.
+- NO change to training, env, reward, or features. `list_of_indicators` untouched → no audit edit.
+
+**How to run.** `python run_panel.py v73` (full panel). Read WHICH timestep each stock's best
+checkpoint lands on vs v18: if v73 systematically picks *earlier* checkpoints on the known
+overfitters (INFY, HDFCBANK), the gap signal is doing what it should.
+
+**Diagnostic / caveat.**
+- **Primary read:** on the v18 overfit casualties (INFY val@200k, HDFCBANK), does v73 select an
+  earlier, lower-train-EV checkpoint that generalizes better on test? Log `(timestep, train_metric,
+  val_metric, gap, score)` quadruples per eval.
+- **Degeneracy guard:** the gap penalty must NOT be gameable by a do-nothing policy (train≈val≈0 →
+  gap≈0 → score≈0). Keep the v37 exposure-floor (≥0.15) + churn ceiling as a *hard eligibility
+  filter* BEFORE the gap objective is computed, so a cash-hold cannot win on a tiny gap. **Caveat:
+  v37 is itself UNRUN** — until it lands, apply the exposure-floor + churn check post-hoc here too.
+- **beta sensitivity:** beta too high selects under-trained checkpoints (small gap, low val); beta
+  too low ≈ v18 (val-level). Start beta=0.5; a beta sweep is the follow-up, each still one variable.
+- **Cost:** one extra deterministic rollout (train slice) per eval — cheap relative to training.
+
+**Sources.** Lyle et al., "Learning Dynamics and Generalization in Deep Reinforcement Learning,"
+ICML 2022, https://proceedings.mlr.press/v162/lyle22a/lyle22a.pdf ; generalization gap as a
+model-selection / early-stopping signal (flat-minima & train-val divergence),
+https://www.emergentmind.com/topics/generalization-gap ; "Train longer, generalize better,"
+NeurIPS 2017, http://papers.neurips.cc/paper/6770-train-longer-generalize-better-closing-the-generalization-gap-in-large-batch-training-of-neural-networks.pdf .
