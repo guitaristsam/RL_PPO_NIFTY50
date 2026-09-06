@@ -84,6 +84,24 @@ All experiments use SEED=42 unless noted. METRIC2 (clipped) is the keep/discard 
 
 **NOTE on ITC-1 through ITC-15 (pre-2026-09-05):** these rows pre-date METRIC2. The column labeled "METRIC2" shows the unclipped METRIC value; "METRIC" shows the test outperformance. Reinterpret accordingly.
 
+### 2026-09-06 (METRIC2_clip50 era, gate=25.69pp, target=+16.49pp) — exposure diagnostic added
+
+Session added val_exp (mean val exposure fraction) to per-stock output. Advisor finding: proxy policies have 67-100% exposure, not near-zero beta. Production panel beta≈0 is driven by degenerate TATAMOTORS/HINDALCO stocks. v18 correct baseline corrected to -72.74pp (NEEDS_HUMAN.md). FRONTIER updated.
+
+| # | date (UTC) | change (one variable) | METRIC2 | METRIC | test | kept? | commit |
+|---|---|---|---|---|---|---|---|
+| ITC-32 | 2026-09-06 | activation_fn Tanh→ReLU (MLP layers use ReLU instead of Tanh) | **+5.684** | +5.684 | -14.636 | DISCARD (+14.878pp vs baseline; NEW BEST; under gate 25.69pp; val-test gap large — HDFCBANK +0.58pp val only; note: test col ignored per protocol) | — |
+| ITC-31 | 2026-09-06 | gamma 0.99→0.98 | -20.612 | -69.971 | -26.513 | DISCARD (−11.4pp vs baseline; RELIANCE heavily penalized) | — |
+| ITC-30 | 2026-09-06 | gamma 0.99→0.96 | -20.333 | -46.729 | -33.233 | DISCARD (−11.1pp vs baseline; HDFCBANK +0.58pp is floor) | — |
+| ITC-29 | 2026-09-06 | gamma 0.99→0.97 (shorter discount horizon) | **+3.395** | +3.395 | -16.156 | DISCARD (+12.59pp vs baseline; under gate; directional HIT — best gamma value; sweet spot 0.97; pattern: 0.97>0.95>0.99>0.96>0.98) | — |
+| ITC-28 | 2026-09-06 | normalize_advantage False (disable batch advantage normalization) | -36.612 | -71.110 | -40.647 | DISCARD (−27.4pp vs baseline; destabilizes updates; HDFCBANK 36.4% exposure, low) | — |
+| ITC-27 | 2026-09-06 | DD_LAMBDA 1.0→0 (remove DD penalty entirely) | -15.968 | -15.968 | — | DISCARD (−6.8pp vs baseline; pure log-return prefers cash on volatile stocks; RELIANCE exposure collapsed to 24.3%) | — |
+| ITC-26 | 2026-09-06 | USE_FULLY_INVESTED_START=True (start fully invested, v27 env) | -26.071 | -26.071 | — | DISCARD (−16.9pp vs baseline; DD penalty fires immediately → policy learns to sell; v27+DD trap) | — |
+| ITC-25 | 2026-09-06 | n_steps 512→1024 (longer rollouts) | -33.681 | -33.681 | — | DISCARD (−24.5pp vs baseline; too few updates at 60k budget) | — |
+| ITC-24 | 2026-09-06 | gamma 0.99→0.95 re-run under METRIC2 | **-4.201** | -4.201 | — | DISCARD (+4.99pp vs baseline; directional HIT — confirms ITC-6; 0.97 is better sweet spot) | — |
+| ITC-23 | 2026-09-06 | learning_rate 3e-4→linear decay (lambda p: 3e-4*p) | **-4.907** | -4.907 | +8.811 | DISCARD (+4.3pp vs baseline; directional HIT; test also positive) | — |
+| ITC-22 | 2026-09-06 | target_kl 0.02 (early-stop epochs when KL>threshold) | -16.778 | -23.842 | -6.878 | DISCARD (−7.6pp vs baseline; RELIANCE collapses; ITC+HDFCBANK improved) | — |
+
 ### 2026-09-05 (METRIC2_clip50 era, gate=25.69pp, target=+16.49pp)
 
 | # | date (UTC) | change (one variable) | METRIC2 | METRIC | test | kept? | commit |

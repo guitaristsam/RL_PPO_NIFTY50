@@ -1,85 +1,73 @@
 # HANDOFF — auto-tinker session state
 
-**Session start:** 2026-09-02T21:11:18Z (session 3)
+**Session start:** 2026-09-06T21:09:55Z (current session)
 
 ## Current task
 
-Continuing hyperparameter experiments from the 22-indicator champion (exp1: -7.855pp).
-Gate = 60.4pp (calibrated 2026-09-01). Gate target to beat: -7.855 + 60.4 = +52.5pp.
-Gate analysis: physically unreachable on this panel — TATAMOTORS bear val inflates noise.
-Key insight: gate unreachable, but logging for directional insights. Advisor recommends panel recalibration.
+Running METRIC2_clip50 proxy experiments on ITC panel (RELIANCE/ITC/HDFCBANK).
+Gate = 25.69pp. Baseline = -9.194pp. Target to beat = +16.49pp.
 
-## Advisor guidance (session 3 start, 2026-09-02)
+No experiment has cleared the gate yet. Best result: ITC-32 (ReLU activation) at +5.684pp (+14.878pp vs baseline).
 
-Independent Opus advisor recommended:
-1. Skip n_lstm_layers=2 and vf_coef=1.0 (contraindicated — add capacity to already-overfitting model)
-2. n_epochs 5→3 (exp18) — best of planned 4
-3. n_steps=256 + gamma=0.95 combination run (exploratory, same "shorter horizon" hypothesis)
-4. Panel recalibration: 5 stocks or clip per-stock at ±100pp to reduce σ and make gate reachable
-5. batch_size 128 (weaker prior)
+## Key findings this session
 
-## Progress
+- **ReLU activation (ITC-32):** METRIC2=+5.684pp — NEW BEST. +14.878pp vs baseline. Under gate.
+- **gamma=0.97 (ITC-29):** METRIC2=+3.395pp — second best. +12.59pp vs baseline. Sweet spot at 0.97.
+- **gamma sweet spot:** 0.97 > 0.95 > 0.99 > 0.96 > 0.98. Non-monotonic; 0.97 is clearly best.
+- **normalize_advantage=False (ITC-28):** -36.612pp — destabilizes training significantly.
+- **v27 env (start fully invested, ITC-26):** -26.071pp — DD penalty fires immediately, policy sells.
+- **DD_LAMBDA=0 (ITC-27):** -15.968pp — pure log-return prefers cash for volatile stocks.
+- **LR decay (ITC-23):** -4.907pp — still a directional hit (+4.3pp vs baseline).
 
-- [x] Calibration seed 42/43/44 — DONE. Gate = 60.4pp.
-- [x] exp1: 106→22 indicators — KEPT (-7.855pp, +67.7pp vs baseline), commit 9c74acb
-- [x] exp2: n_epochs 5→10 — DISCARD (-82.766pp)
-- [x] exp3: lstm 128→64 — DISCARD (+1.169pp, under gate)
-- [x] exp4: ent_coef 0.01→0.05 — DISCARD (-4.778pp, under gate)
-- [x] exp5: n_steps 512→256 — DISCARD (+9.512pp, under gate; best secondary result)
-- [x] exp6: lr 3e-4→1e-3 — DISCARD (-96.906pp)
-- [x] exp7: gae_lambda 0.95→0.80 — DISCARD (-101.674pp)
-- [x] exp8: 22→6 indicators — DISCARD (-47.033pp; test near-zero +0.406pp notable)
-- [x] exp9: clip_range 0.2→0.1 — DISCARD (-89.735pp)
-- [x] exp10: lr 3e-4→1e-4 — DISCARD (-110.912pp)
-- [x] exp11: n_steps 512→1024 — DISCARD (-75.125pp; test +26.439pp, all 3 beat B&H notable)
-- [x] exp12: 11-indicator trend set — DISCARD (-86.689pp)
-- [x] exp13: BUDGET 60k→80k — DISCARD (-8.686pp, ≈ same as champion)
-- [x] exp14: gamma 0.99→0.95 — DISCARD (+5.560pp, +13.4pp over champion, under gate)
-- [x] exp15: n_lstm_layers 1→2 — DISCARD (-59.684pp; advisor confirmed contraindicated)
-- [ ] Panel recalibration seed 42 — RUNNING (RELIANCE/ITC/HDFCBANK; v26 artifacts invalidated original panel)
-- [ ] Panel recalibration seed 43
-- [ ] Panel recalibration seed 44 → set new gate
-- [ ] exp16: n_epochs 5→3 (advisor top pick, after recalibration)
-- [ ] exp17: n_steps=256 + gamma=0.95 (combination, exploratory)
-- [ ] exp18: batch_size 64→128 (weaker prior)
+## Progress (all experiments ITC-panel, seed=42, BUDGET=60k)
+
+- [x] ITC-22: target_kl=0.02 → -16.778pp DISCARD
+- [x] ITC-23: LR linear decay → -4.907pp DISCARD (+4.3pp, directional HIT)
+- [x] ITC-24: gamma=0.95 re-run → -4.201pp DISCARD (+4.99pp, directional HIT)
+- [x] ITC-25: n_steps=1024 → -33.681pp DISCARD
+- [x] ITC-26: USE_FULLY_INVESTED_START=True → -26.071pp DISCARD
+- [x] ITC-27: DD_LAMBDA=0 → -15.968pp DISCARD
+- [x] ITC-28: normalize_advantage=False → -36.612pp DISCARD
+- [x] ITC-29: gamma=0.97 → +3.395pp DISCARD (NEW BEST at time; directional HIT)
+- [x] ITC-30: gamma=0.96 → -20.333pp DISCARD
+- [x] ITC-31: gamma=0.98 → -20.612pp DISCARD
+- [x] ITC-32: activation_fn=ReLU → +5.684pp DISCARD (NEW BEST; directional HIT)
 
 ## Current train.py state
 
-- STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]  ← PANEL CHANGED for recalibration
+- STOCKS = ["RELIANCE", "ITC", "HDFCBANK"]
 - BUDGET_TIMESTEPS = 60000
 - SEED = 42
-- INDICATORS: 22-indicator v26 curated set (proxy baseline)
-- n_lstm_layers = 1 (reverted after exp15)
+- INDICATORS: 22-indicator v26 curated set
+- ALL PPO_PARAMS at v18 baseline (gamma=0.99, Tanh, etc.)
 
-## Uncommitted changes
+## Next experiments (priority order)
 
-- autoresearch/train.py — n_lstm_layers=2 (exp15)
-- autoresearch/HANDOFF.tinker.md — this file
+1. **LR=2e-4**: untried; interpolate between 3e-4 (baseline) and 1e-4 (bad in TATAMOTORS era)
+2. **gae_lambda=0.90**: between 0.95 baseline and 0.80 (ITC-7 bad); test shorter credit horizon
+3. **n_epochs=4**: interpolate between 5 (baseline) and 3 (ITC-2 bad)
+4. **clip_range=0.25**: between 0.2 (baseline) and 0.3 (ITC-10 bad in old era)
+5. Do NOT retry: shared_lstm=True (needs enable_critic_lstm=False too → two-variable)
 
-## Next step
+## Patterns observed
 
-1. Wait for panel recalibration seed 42 (ITC panel) result
-2. Then SEED=43 recalibration (change SEED in train.py)
-3. Then SEED=44 recalibration → compute new gate = max(3pp, 2*stdev)
-4. Set SEED=42, then run exp16 (n_epochs 5→3) on new panel
-5. exp17 combination n_steps=256 + gamma=0.95
-6. exp18 batch_size 128
+Strong hits: ReLU activation (+14.9pp), gamma=0.97 (+12.6pp)
+Moderate hits: gamma=0.95 (+5.0pp), LR decay (+4.3pp)
+Catastrophic: normalize_advantage=False (-27pp), n_epochs=3 (-99pp), batch=128 (-97pp)
+Gate is structurally difficult: RELIANCE val B&H=+300% (2016-2020 bull) makes the stock nearly unbeatable.
+
+## Committed / pushed?
+
+All log.md updates through ITC-32 committed in this session's main commit.
+Push pending — do this at next commit point.
 
 ## Gotchas
 
-- pandas_ta hma.py patched for Python 3.11 (line 69) — patch already applied this session. Fresh containers need re-patch.
-- .ta_cache/ is populated (RELIANCE, TATAMOTORS, HDFCBANK) — runs are fast (~8-12 min per experiment).
-- Gate (60.4pp) calibrated for 3-stock panel at 60k budget. If STOCKS or BUDGET_TIMESTEPS changes, must recalibrate.
-- 80k budget confirmed ≈ same as 60k on val (exp13); no benefit to increasing budget.
-- TATAMOTORS seed=42 degenerate cash-hold (B&H=-55.75% in val period, policy likely holds cash for +177pp).
-  This inflates baseline and makes gate physically unreachable.
-- Advisor says: ignore test column (too noisy), focus on val directional insights.
-
-## Summary table (directional hits so far, all under gate)
-
-| exp | change | val pp | vs champion | direction |
-|---|---|---|---|---|
-| 14 | gamma 0.95 | +5.56 | +13.4pp | ↑ (shorter horizon) |
-| 5 | n_steps 256 | +9.51 | +17.4pp | ↑ (more frequent updates) |
-| 4 | ent_coef 0.05 | -4.78 | +3.1pp | ↑ (more exploration) |
-| 3 | lstm 64 | +1.17 | +9.0pp | ↑ (less capacity) |
+- pandas_ta hma.py already patched for Python 3.11 in this container.
+- .ta_cache/ populated — runs are ~8 min each.
+- train.py is at BASELINE after each DISCARD (git checkout -- autoresearch/train.py).
+- Exposure diagnostic (val_exp) was added to train.py during this session but reverted
+  with git checkout when we stopped using the _ConfigurableEnv framework. Not needed for
+  current experiments.
+- Gate unreachability confirmed: with RELIANCE val B&H = +300%, clearing +16.49pp METRIC2
+  requires exceptional policy. Directional hits build evidence; keep experimenting.

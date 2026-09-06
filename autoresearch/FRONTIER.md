@@ -109,12 +109,13 @@ vs buy-and-hold. This is what new production variants must beat.
 
 | variant | mean outperf vs B&H | beats-B&H count | notes |
 |---|---|---|---|
-| **v18 (baseline)** | −63.2pp | 1/10 | **PRODUCTION CHAMPION** — genuine policies, see CLAUDE.md |
+| **v18 (baseline, corrected 2026-09-06)** | **−72.74pp** | **1/10 (ADANIENT +4.12pp only)** | **PRODUCTION CHAMPION** — CORRECTED by run-b fresh panel run (pre-vecnorm-fix inflated prior numbers). ITC -65.99pp (not +40pp). TATAMOTORS degenerate (5 trades). See NEEDS_HUMAN.md. |
 | ~~v26 (bookkeeping)~~ | −51.49pp | 2/10 | ⚠️ ARTIFACT: both B&H-beats are degenerate cash-holds (ADANIENT 0 trades, HDFCBANK 5 trades). ITC −101pp regression. **Do NOT build on v26.** See results_v26/READOUT.md on auto/run-a. 2026-09-02. |
 
 > v26 takes the ratchet on raw mean outperf but is flagged as an inactivity artifact by run-A.
 > v18 remains the production champion for the purpose of building new variants.
 > Next production challenger needs to beat v18 with GENUINE active policies (≥20 trades/stock).
+> Note: v19/v20/v21/v23 all within ±1.2pp of corrected v18 — none are genuine improvements.
 
 **Invalidated proxy win:** The auto-tinker 22-indicator proxy champion (-7.855pp) is the same
 degenerate artifact. TATAMOTORS val cash-hold produces artificial +177pp; removing that stock's
