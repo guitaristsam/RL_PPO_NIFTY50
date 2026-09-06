@@ -1,11 +1,12 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-06T23:25:00Z
+Last updated: 2026-09-06T23:56:01Z
 
 ## Status: RUNNING — v29 panel (DD lambda=0)
 
 **Current task:** v29 full panel (DD penalty removed, lambda=0.0) — STARTED ~23:25 UTC
-**Next task:** v23 (warmup=150k) — likely skip (advisor says null; cost drag is minority term)
+**Progress:** RELIANCE done (-47.17pp, +29.76pp vs v18). INFY done (-47.11pp, -7.61pp vs v18). TATAMOTORS training (~87k/200k steps as of 00:00 UTC).
+**Next task:** after panel completes — analytics, READOUT.md, ADVISOR boundary B, PR update
 
 ## Decision: Why v29 (not v23/v27/v63)
 
@@ -28,7 +29,7 @@ Advisor (Opus, 2026-09-06 session boundary A) rejected v23/v27/v63 and proposed 
 | v20 (best-by-Sharpe) | DONE | -71.58pp — null vs v18 -72.74pp |
 | v21 (target-exposure) | DONE | -73.16pp — null vs v18 -72.74pp |
 | v23 (warmup=150k) | SKIP (advisor: null, wrong lever) | — |
-| v29 (DD penalty removed) | **IN PROGRESS** | est. finish ~1:45 UTC |
+| v29 (DD penalty removed) | **IN PROGRESS** | RELIANCE: -47.17pp (v18: -76.93pp, +29.76pp). INFY: -47.11pp (v18: -39.50pp, -7.61pp). TATAMOTORS in training. |
 | v63 (obs-noise) | SKIP (advisor: wrong lever) | — |
 | v28 (turnover penalty) | QUEUED if v29 shows exposure is not binding | — |
 
