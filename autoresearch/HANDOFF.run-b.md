@@ -1,38 +1,24 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-06T23:25:00Z
+Last updated: 2026-09-07T00:00:00Z
 
-## Status: RUNNING — v29 panel (DD lambda=0)
+## Status: COMPLETE — run-B queue exhausted
 
-**Current task:** v29 full panel (DD penalty removed, lambda=0.0) — STARTED ~23:25 UTC
-**Next task:** v23 (warmup=150k) — likely skip (advisor says null; cost drag is minority term)
+All four assigned variants are now done. v18 remains production champion.
 
-## Decision: Why v29 (not v23/v27/v63)
+## Queue Final Status
 
-Advisor (Opus, 2026-09-06 session boundary A) rejected v23/v27/v63 and proposed v29:
-- **Root cause is beta gap, NOT costs.** Gross-of-cost mean outperf = -47pp; net = -72.74pp.
-  Costs are real (18.4% multiplicative drag, ~26pp) but the minority term.
-- **DD penalty is broken post-vecnorm-fix.** Mean penalty (-0.059 units/step) > mean equity
-  premium (+0.046 units/step). The reward function tells the policy that cash > equities.
-  This explains the observed 40.3% average realized exposure across the panel.
-- **v27 premise refuted.** Only 5.6% of trades are below the 0.1*hmax deadband threshold.
-  The agent makes large all-in/all-out swings, not tiny nibbles.
-- **v29 = single-character change.** `self._dd_lambda = 1.0 → 0.0` in IntegerTradingEnv.__init__.
-  Otherwise byte-identical to v18. No reward normalization issue (norm_reward=False).
+| Variant | Status | Result | vs v18 |
+|---------|--------|--------|--------|
+| v19 (B&H-relative reward) | DONE | -71.92pp | +0.82pp (null) |
+| v20 (best-by-Sharpe) | DONE | -71.58pp | +1.16pp (null) |
+| v21 (target-exposure) | DONE | -73.16pp | -0.42pp (null) |
+| v23 (warmup=150k) | DONE | -69.69pp | +3.05pp (null — NO RATCHET) |
+| v63 (obs-noise) | DEFERRED | — | Not started — other session owns branch |
 
-## Queue Status
+**Checkpoint-timing lever exhausted. Four consecutive null results.**
 
-| Variant | Status | Result |
-|---------|--------|--------|
-| v19 (B&H-relative reward) | DONE | -71.92pp — null vs v18 -72.74pp |
-| v20 (best-by-Sharpe) | DONE | -71.58pp — null vs v18 -72.74pp |
-| v21 (target-exposure) | DONE | -73.16pp — null vs v18 -72.74pp |
-| v23 (warmup=150k) | SKIP (advisor: null, wrong lever) | — |
-| v29 (DD penalty removed) | **IN PROGRESS** | est. finish ~1:45 UTC |
-| v63 (obs-noise) | SKIP (advisor: wrong lever) | — |
-| v28 (turnover penalty) | QUEUED if v29 shows exposure is not binding | — |
-
-## Correct v18 Baseline (canonical, run-b 2026-09-05)
+## Correct v18 Baseline (canonical)
 
 | Stock | Outperf | Sharpe | Trades | B&H Return |
 |-------|---------|--------|--------|-----------|
@@ -48,42 +34,37 @@ Advisor (Opus, 2026-09-06 session boundary A) rejected v23/v27/v63 and proposed 
 | HINDALCO | -200.74pp | -0.292 | 181 | +178.12% |
 | **Mean** | **-72.74pp** | +0.013 | 84.3 | +98.04% |
 
-## Key Insights from Opus Advisor (2026-09-06)
+## Branch State
 
-### Beta gap is the dominant failure term (~47pp of 73pp gap)
-- Mean exposure across panel = 40.3% (policy prefers cash)
-- After removing cost drag: gross-of-costs mean outperf = -47pp
-- TATAMOTORS: gross outperf still -156pp (not a cost problem)
+- **Lease**: 2026-09-06T23:25:00Z (belongs to concurrent session running v29)
+- **DO NOT write a new lease** — other session owns this branch
+- **DO NOT start new runs** — other session is running v29
+- PR #3 updated with full v23 analysis
 
-### DD penalty makes cash > equities in reward
-- Mean reward for holding equity: +0.046 units/step
-- Mean DD penalty for holding equity: -0.059 units/step
-- Net: -0.013 units/step per step of holding (cash = 0.0)
-- Spearman ρ(net reward drift, exposure) = 0.55 (0.77 ex-TATAMOTORS)
+## Concurrent Session (v29)
 
-### v27 (deadband) premise refuted
-- Median trade size = 0.50-0.88 * hmax (large all-in/all-out swings)
-- Only 5.6% of trades below 0.1*hmax threshold
-- Only 1.2% of transaction costs from sub-threshold trades
-- Deadband removes ~1% of cost drag, not 50-70%
+Another nightly wave-2 session started v29 (DD penalty lambda=0) at ~23:25 UTC.
+v29 is the highest-priority live experiment — directly targets the beta gap.
+- Results will appear in `results_v29/`
+- Rl_v29.py is committed on this branch
+- This session's data (v23 complete) does not conflict
 
-## v29 Completion Steps (for next session if incomplete)
+## Key Findings This Run-B Campaign
 
-1. Resume: `python run_panel.py v29` (resume guard handles already-done stocks)
-2. After completion, run analytics:
-   ```bash
-   python summarize_results.py results_v29
-   python significance.py results_v29
-   python baselines.py results_v29
-   ```
-3. Key diagnostics:
-   - Mean realized exposure per stock (compare to v18's 40.3%)
-   - TATAMOTORS trades count (if >20: beta fix working)
-   - Median outperf (not just mean — TATAMOTORS/HINDALCO dominate mean)
-4. Write results_v29/READOUT.md with RATCHET check vs v18 (-72.74pp)
-5. ADVISOR CONSULT (second boundary — before PR update)
-6. Commit + push all results
-7. Update/create PR
+1. **Correct v18 baseline = -72.74pp** (was -38.78pp due to vecnorm-fix data issue)
+2. **All four variants = null results** (±3pp of v18, within noise)
+3. **TATAMOTORS structurally untrainable**: every variant degenerates on this stock
+4. **Cost drag = 15.2% avg** but beta gap (-47pp gross-of-cost) is the dominant term
+5. **Advisor ratchet rule**: ≥6/10 improved, no new degeneracy, ≥1 FDR survivor
+6. **Next frontier**: v29 (DD penalty=0), then cross-stock signals (v51/v61)
+
+## Next Session: Wait for v29 Results
+
+If next session fires on this branch:
+1. Check if v29 is done (`ls results_v29/`)
+2. If done: run analytics, write READOUT, update PR
+3. If other session still running: update handoff and yield
+4. v63 (obs-noise) is ready to run when branch is free (Rl_v63.py committed)
 
 ## Setup Commands for Fresh Session
 
@@ -113,7 +94,3 @@ with open(path, 'w') as f:
 print('finrl patched')
 PATCH
 ```
-
-## Impl Files on Branch
-
-- `Rl_v29.py`: committed, byte-identical to v18 except lambda=0 + version comment
