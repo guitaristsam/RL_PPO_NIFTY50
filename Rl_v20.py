@@ -751,15 +751,16 @@ class ValidationCallback(BaseCallback):
         val_return_pct = (final_value / self.initial_amount - 1.0) * 100.0
 
         # v20: compute val Sharpe = mean(daily_returns) / std(daily_returns) * sqrt(252).
-        # If std is 0 (e.g. degenerate all-cash policy), Sharpe = 0 — neutral, not penalised
-        # twice (the min_val_trades filter already handles degenerate policies).
+        # If std is 0 (e.g. near-cash policy with < 1e-6 daily return variance), use -inf so
+        # a barely-trading policy never beats a genuinely active but losing policy.
+        # min_val_trades handles truly 0-trade policies; this catches near-flat curves.
         pv = np.asarray(portfolio_values, dtype=np.float64)
         daily_returns = np.diff(pv) / np.maximum(pv[:-1], 1e-9)
         std = float(np.std(daily_returns)) if len(daily_returns) else 0.0
         # Floor the std: near-flat (mostly-cash) curves produce std ~ 1e-9 and
         # astronomical Sharpe. Also require enough return observations.
         if std < 1e-6 or len(daily_returns) < 20:
-            val_sharpe = 0.0
+            val_sharpe = -float('inf')
         else:
             val_sharpe = float(np.mean(daily_returns) / std * np.sqrt(252.0))
 
