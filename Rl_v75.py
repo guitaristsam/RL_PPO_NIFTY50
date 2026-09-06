@@ -2,8 +2,9 @@
 # CHANGE (one variable): add PPO target_kl=0.02 (was None / no KL limit).
 # Everything else is byte-identical to v18 (106 features, reward, callback,
 # splits, learning_rate, clip_range, all policy_kwargs).
-# Rationale: SB3 PPO stops the epoch loop early when the mean approx-KL between
-# the old and new policy exceeds target_kl. This is an ADAPTIVE per-update
+# Rationale: SB3 PPO breaks the update loop (at a minibatch boundary) once the
+# running mean approx-KL exceeds 1.5*target_kl (so 0.02 -> effective ~0.03).
+# This is an ADAPTIVE per-update
 # trust-region tightening — a different mechanism from the FIXED clip_range
 # tweaks (0.1/0.15/0.3) that were already screened and DISCARDED. It caps how
 # far each rollout can move the policy regardless of clip, curbing the

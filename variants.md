@@ -2779,11 +2779,18 @@ within trust region, so it is gentler than simply cutting n_epochs (also rejecte
 
 **How to run.** `python run_panel.py v75` (full 10-stock panel).
 
+**SB3 mechanism precision (advisor).** SB3 breaks the update loop when the running mean
+approx-KL exceeds **1.5 × target_kl**, checked at a MINIBATCH boundary (not cleanly "at
+the end of each epoch"). So with target_kl=0.02 the effective break threshold is ~0.03 —
+which only STRENGTHENS the "may not bind" caveat below. SB3 does NOT log a clean
+per-update "epochs actually run" counter, so do not rely on that as the diagnostic.
+
 **Diagnostic to look for.**
-- **Primary:** the number of epochs actually run per update should fall below 5 in LATE
-  training (the loop early-stops) while staying near 5 early. SB3 logs
-  `train/n_updates` and the KL; if it never early-stops, target_kl=0.02 is too loose —
-  the follow-up single-variable sweep is 0.015 / 0.01.
+- **Primary:** read SB3's `train/approx_kl` over training. If it is consistently well
+  under ~0.03, the break rarely fires and v75 is ~a no-op at 0.02 — that is informative
+  (the actor is not the runaway component) and the follow-up single-variable sweep is
+  target_kl=0.01, then 0.015. If `approx_kl` shows a ceiling near 0.03, the trust region
+  is binding as intended.
 - Val-curve shape: as with v74, look for reduced decay past 100k on INFY / HDFCBANK.
 - **Guardrail:** if target_kl is too tight, the policy under-trains (std stays high, few
   effective updates, degenerate low-trade policy). Enforce the ≥20-trade genuineness gate;
@@ -2809,50 +2816,30 @@ divergence [exceeds the target]," https://stable-baselines3.readthedocs.io/en/ma
 
 ---
 
-## Rl_v76.py — DESIGN ONLY — fully DECOUPLE (unshare) the actor/critic post-LSTM MLP head
+## ~~Rl_v76.py — decouple/unshare the actor-critic MLP head~~ — VOID (no-op at the pinned SB3), do NOT draft
 
-**Hypothesis.** v18 sets `net_arch=[128]` as a plain list, which in SB3 on-policy algos
-means the post-LSTM MLP is SHARED between the actor and the critic (only the LSTMs are
-already separate via `shared_lstm=False, enable_critic_lstm=True`). A shared trunk lets
-the critic's overfitting (EV→0.99) contaminate the policy representation — the exact
-mechanism the "Decoupling Value and Policy for Generalization" (DAAC/IDAAC, Raileanu &
-Fergus 2021) line of work identifies as a primary generalization killer in actor-critic
-RL. Fully unsharing the MLP head (`net_arch=dict(pi=[128], vf=[128])`) gives the policy
-its own representation that is not dragged toward memorizing returns.
+**VOIDED 2026-09-06 by the pre-PR advisor pass. Its premise is FALSE at this repo's SB3
+pin.** v76 proposed changing `net_arch=[128]` → `dict(pi=[128], vf=[128])` on the belief
+that a plain-list `net_arch` SHARES the post-LSTM MLP between actor and critic. That was
+true only in SB3 < 1.8.0. **SB3 1.8.0 REMOVED shared layers from `MlpExtractor`**: since
+then a list `net_arch=[128]` already builds SEPARATE `policy_net` and `value_net` with the
+same shape, made consistent with the off-policy algorithms. `requirements.txt` pins
+`stable-baselines3 >= 2.2.0`, so v18's `net_arch=[128]` is ALREADY fully decoupled (the
+LSTMs are separate too via `shared_lstm=False, enable_critic_lstm=True`). Therefore
+`[128]` is byte-equivalent to `dict(pi=[128], vf=[128])` — v76 is a genuine **no-op**, and
+the DAAC/IDAAC "unshare the trunk" framing does not apply to this stack (there is no
+shared trunk to unshare). The real capacity knob on the value head is already covered by
+**v69** (`{"pi":[128],"vf":[64]}`, asymmetric shrink). Do NOT draft or run v76.
 
-**Distinctness (vs v69).** v69 sets `net_arch={"pi":[128],"vf":[64]}` — it CONFOUNDS two
-changes: unsharing AND shrinking the critic. v76 isolates the *decoupling* variable alone
-(both heads stay width 128, only the sharing is removed). Per the project's single-
-variable discipline (v10/v11 taught that two simultaneously-positive changes can offset),
-v76 is the cleaner primitive; run it to attribute any v69 gain to decouple-vs-shrink.
-Also distinct from v55 (symmetric shrink of a still-shared trunk).
+Lesson for future sessions: any proposal whose mechanism is "unshare the actor/critic
+MLP" is dead at SB3 ≥ 1.8.0. The only live net_arch levers are WIDTH/DEPTH per head
+(v55 symmetric, v69 asymmetric), not sharing.
 
-**Code change (single variable vs v18: net_arch sharing).**
-- `train_ppo_model` `PPO_PARAMS["policy_kwargs"]` (Rl_v18.py:777): `"net_arch": [128]`
-  → `"net_arch": {"pi": [128], "vf": [128]}`.
-- Nothing else changes. `list_of_indicators` untouched → no audit edit.
-
-**How to run.** `python run_panel.py v76` (once DRAFTED — trivial one-line copy of v18).
-
-**Diagnostic to look for.**
-- Train EV should stay high on the critic head, but the *gap* between train and test
-  return should narrow if the policy head is no longer contaminated. Compare test
-  outperformance vs both v18 (shared) and v69 (unshared+shrunk) to decompose the axis.
-- If v76 ≈ v18 but v69 > v18, the gain is from SHRINKING the critic, not unsharing — so
-  double down on capacity (v55/v56/v57), not decoupling. If v76 > v18, decoupling is the
-  active ingredient and IDAAC-style value-detachment becomes the next fork.
-
-**Why DESIGN ONLY.** Gated behind v69's panel result: if v69 is run first and loses, the
-decouple axis is dead and v76 is not worth a run; if v69 wins, v76 is the *required*
-attribution experiment. Sequencing it avoids spending two panel runs before learning
-which half of v69 mattered.
-
-**Sources.** Raileanu & Fergus, "Decoupling Value and Policy for Generalization in
-Reinforcement Learning," ICML 2021, https://arxiv.org/pdf/2102.10330 ; SB3 custom
-network `net_arch=dict(pi=[...], vf=[...])` for separate policy/value MLPs,
-https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html ; critic
-overfitting worsens as actor/critic share representation (FinRL generalization-gap /
-regime-divergence findings), https://arxiv.org/html/2504.02281v3 .
+**Sources (for the correction).** SB3 1.8.0 changelog — shared layers in `mlp_extractor`
+removed so that `net_arch=[64,64]` builds separate networks, consistent with off-policy
+algos: https://stable-baselines3.readthedocs.io/en/master/misc/changelog.html ; DAAC/IDAAC
+context (the mechanism that does NOT apply here), Raileanu & Fergus ICML 2021,
+https://arxiv.org/pdf/2102.10330 .
 
 ---
 
@@ -2945,11 +2932,17 @@ comparison a **k-seed ensemble MEAN (k=5)** rather than a single seed. For each 
 outperformance with its across-seed standard error. A true ~10pp effect has its noise
 band shrink ~√k, so it can clear the gate that a single noisy seed cannot.
 
-**Distinctness (why this is NOT v22).** v22 ensembles at INFERENCE — it averages k
-policies' continuous actions to build a *better deployed model*. v78 is a *statistical
-comparison protocol*: k seeds are trained and each evaluated independently; we compare
-the distribution of single-seed test outcomes, not a merged policy. v22 changes the
-product; v78 changes the yardstick. They are compatible (one could report both).
+**Distinctness (why this is NOT v22) — and the estimator must be stated explicitly
+(advisor).** v22 ensembles at INFERENCE — it averages k policies' actions to build a
+*better deployed model*, and its reported number IS that averaged policy's return. v78 is
+a *statistical comparison protocol*: it trains k seeds, evaluates each INDEPENDENTLY, and
+compares the DISTRIBUTION of single-seed test outcomes (mean ± across-seed SE). **What is
+DEPLOYED under v78 is a SINGLE seed** (a v18-lineage model), and what is MEASURED is the
+5-seed mean — these must not be conflated. If instead you deploy the averaged policy, you
+are running v22, not v78; pick one and label it. The v78 mean is an estimate of *expected*
+single-seed performance, NOT a promise about the one seed that ships — a run that reports
+the 5-seed mean must also report the seed-to-seed spread so the deployment variance is
+visible, never hidden behind the shrunk SE.
 
 **How to run.** No new file. Extend `run_panel.py` / `significance.py` to loop
 `seed_offset ∈ {0..4}` per config (v22 already exposes `seed_offset`; reuse that
@@ -2963,9 +2956,18 @@ cheapest path to advancing the frontier tonight, ahead of any new lever. Second
 application: use the same 5-seed protocol for v74/v75/v77 so a real but modest
 optimization-side effect is not lost to seed noise.
 
-**Honest caveat.** 5× the compute per config. Spend it on the ONE candidate most likely
-to be a real-but-under-gate effect (v55) first, not on every variant. This is a
-throughput/measurement decision for the run routines, logged here so it is not re-derived.
+**Honest caveat — motivated inference / forking-paths risk (advisor).** v78 is
+explicitly engineered to push v55 over the gate, which is exactly the setup where a
+protocol chosen *after seeing* a promising result inflates false positives. To keep it
+honest it MUST be PRE-REGISTERED before the run: fix k=5, the exact seeds, the metric
+(v37 exposure-adjusted alpha), and the gate BEFORE looking at the 5-seed numbers, and
+report the result whether it clears the gate or not. Also note that seed-averaging can
+*understate* true deployment variance (the SE of the mean shrinks ~√k, but the variance
+of the one seed you ship does not), so the seed-mean significance stat is a claim about
+the *config*, not the deployed model. And it is 5× the compute per config — spend it on
+the ONE candidate most likely to be a real-but-under-gate effect (v55) first, not on
+every variant. This is a throughput/measurement decision for the run routines, logged
+here so it is not re-derived.
 
 **Sources.** Agarwal et al., "Deep Reinforcement Learning at the Edge of the Statistical
 Precipice," NeurIPS 2021 (report interval estimates over many seeds; single-seed

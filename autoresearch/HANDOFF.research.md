@@ -43,10 +43,11 @@ highest-value missing lever, and v78 (5-seed protocol) as the cheapest path to a
   (1) with n_epochs=5 it may rarely bind → partial no-op; follow-up 0.01/0.015. (2) if it slows
   learning the val peak can shift PAST the 200k eval grid → read val@200k, extend budget only as a
   SEPARATE (second-variable) confirmation. `python run_panel.py v75` works. No audit edit.
-- **v76** DESIGN-ONLY: fully DECOUPLE (unshare) the actor/critic post-LSTM MLP, net_arch
-  [128]→dict(pi=[128],vf=[128]). Grounded by DAAC/IDAAC (Raileanu & Fergus ICML 2021). GATED behind
-  v69: v69 confounds unshare+shrink; v76 isolates the unshare variable. Run v76 ONLY to attribute a
-  v69 win. Not drafted (gated).
+- **v76** ~~decouple/unshare actor-critic MLP~~ **VOIDED by the pre-PR advisor.** Premise FALSE at
+  the SB3 pin: SB3 1.8.0 REMOVED shared MLP layers, so v18's `net_arch=[128]` ALREADY builds
+  separate policy/value nets (== dict(pi=[128],vf=[128])). v76 is a genuine no-op; the real value-head
+  knob is v69's asymmetric shrink. Recorded as VOID in variants.md. **Lesson: any "unshare the
+  actor/critic MLP" idea is dead at SB3 ≥ 1.8.0 — only per-head width/depth is a live net_arch lever.**
 - **v77** random-start fixed-length (L=252) episode windows within the single-stock TRAIN split.
   **DESIGN, HIGH PRIORITY — advisor's #1 missing lever.** Attacks the overfit ROOT (one path
   traversed ~114×) not the downstream optimizer. Distinct from v43 (synthetic stitch) and v24/v45
@@ -89,7 +90,8 @@ highest-value missing lever, and v78 (5-seed protocol) as the cheapest path to a
 DSR reward, weight/L2/reward regularization, deepening-only DD, 1M timesteps, min-val-trades=5,
 n_epochs 5→3, norm_reward=True, snapshot-cyclic-LR ensemble, entropy-decay-from-0, actor/recurrent
 dropout (PPO-unsafe), potential-based reward shaping (inert/v19-dup), CONSTANT lr 1e-3/1e-4,
-decoupled/lower critic LR (vf_coef-overlap + critic-EV non-binding). v19 (B&H-relative) is UNRUN
+decoupled/lower critic LR (vf_coef-overlap + critic-EV non-binding), unshare-actor/critic-MLP
+(no-op at SB3≥1.8.0, was v76). v19 (B&H-relative) is UNRUN
 not rejected. v49 BC must stay warm-START only (persistent KL anchor = the rejected reg). NOTE:
 LR *schedule* (v74) and target_kl (v75) are NOT the rejected constant-LR/clip tweaks — different
 mechanisms; keep them distinct in future rejected-list reasoning.
