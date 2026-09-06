@@ -65,6 +65,12 @@ highest-value missing lever, and v78 (5-seed protocol) as the cheapest path to a
   v10/v11 already showed is NON-binding, and it overlaps the completed vf_coef sweep. Only revisit
   with independent evidence the critic baseline actively poisons advantages (e.g. val improves when
   the critic is frozen).
+- **v79 (obs feature-cutout augmentation) → recorded DESIGN-ONLY/HOLD, not a live fork.** Naive
+  RAD-style train-time obs masking is PPO-UNSAFE (acting dist ≠ loss-eval dist → same v10/v11
+  clip_frac/std pathology as the rejected actor-dropout; Raileanu 2021 shows RAD hurts PPO). Sound
+  form = DrAC (aug + 2 invariance loss terms) = multi-variable + regularization-family (lost before).
+  ONLY salvageable descendant = **value-only DrAC** (critic-invariance term; critic invisible to the
+  PPO ratio, same logic as v69-b) — single-variable, gated behind v68/v69, not before.
 
 ## Immediate next steps for the NEXT research session
 

@@ -2974,3 +2974,48 @@ Precipice," NeurIPS 2021 (report interval estimates over many seeds; single-seed
 point comparisons are unreliable), https://arxiv.org/abs/2108.13264 ; Henderson et al.,
 "Deep Reinforcement Learning that Matters," AAAI 2018 (seed variance dominates RL result
 claims), https://arxiv.org/abs/1709.06560 .
+
+---
+
+## Rl_v79.py — DESIGN ONLY / HOLD — train-time observation feature-cutout augmentation (RAD-unsafe; DrAC-only sound)
+
+**Idea.** Given 101-dim observations against ~2,500 train bars/stock, the policy likely
+over-relies on / co-adapts to specific noisy indicators. A classic generalization-gap
+fix is stochastic OBSERVATION augmentation during training: randomly zero (cutout) a
+random k% of the ~98 indicator dims each step at train time, leaving val/test unmasked,
+forcing the policy to spread its reliance. Distinct in principle from v63 (additive
+Gaussian input noise = jitter) and v46 (a PERMANENT train-only feature-selection cut):
+cutout is a per-step *structural* mask, not a fixed subset or additive jitter.
+
+**Why HOLD, not a clean fork (honest, cited).** Naive per-step observation augmentation
+is **PPO-UNSAFE the same way the already-rejected actor/recurrent dropout is**: the
+augmented observation used when ACTING (collecting the rollout) differs stochastically
+from what the loss re-evaluates, so PPO's importance ratio and entropy are computed
+against an inconsistent distribution. Raileanu et al. 2021 show exactly this — RAD
+(augment observations only) **significantly hurts PPO** relative to plain PPO because it
+is NOT a principled importance-sampling estimate of PPO's objective. The sound version is
+**DrAC** (Data-regularized Actor-Critic), which does not just mask the input but ADDS two
+regularization terms constraining the policy and value to be invariant under the
+augmentation. That is (a) MORE THAN ONE VARIABLE (an augmentation + two loss terms +
+their coefficient), and (b) it lands in the regularization family the board already found
+net-negative on this problem (v10/v11: added regularization → std grew, clip_fraction
+collapsed). So DrAC here is a multi-variable regularization bet against a lever class that
+has lost before — not a clean single-variable fork.
+
+**What IS salvageable (for a future session).** The *value-function* invariance term
+alone is PPO-safe (the critic is invisible to the PPO ratio — same logic that made
+value-net-only dropout the salvageable core of v69-b). A value-only DrAC term
+(critic invariant to indicator-cutout, actor untouched) would be a genuine single-variable
+fork on the value head. Record as the ONLY live descendant of this idea; the actor-side
+augmentation is dead for the same reason actor-dropout is.
+
+**Verdict.** HOLD. Do NOT draft naive RAD-style train-time obs masking (it will reproduce
+the v10/v11 clip_fraction/std pathology). If a normalization/regularization axis ever
+becomes the confirmed bottleneck, revisit as **value-only DrAC**, single-variable, gated
+behind the v68/v69 normalization results — not before.
+
+**Sources.** Raileanu et al., "Automatic Data Augmentation for Generalization in RL"
+(DrAC; RAD-on-PPO hurts because it is not a principled IS estimate of PPO's objective),
+NeurIPS 2021, https://proceedings.neurips.cc/paper/2021/file/2b38c2df6a49b97f706ec9148ce48d86-Paper.pdf ;
+Laskin et al., "Reinforcement Learning with Augmented Data" (RAD), NeurIPS 2020,
+https://arxiv.org/pdf/2004.14990 .
