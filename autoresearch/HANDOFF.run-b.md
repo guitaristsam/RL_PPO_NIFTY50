@@ -1,24 +1,38 @@
 # HANDOFF — auto-run-B
 
-Last updated: 2026-09-06T21:40:00Z
+Last updated: 2026-09-06T23:25:00Z
 
-## Status: IN PROGRESS — v23 panel running (task bi26mq8a8), v63 queued
+## Status: RUNNING — v29 panel (DD lambda=0)
 
-**Current task:** v23 full panel (warmup=150k, eval_freq=25k) — ~40% complete (RELIANCE at ~78k/200k)
-**Next task:** v63 (additive Gaussian obs-noise, train-only) — Rl_v63.py fetched from research branch
+**Current task:** v29 full panel (DD penalty removed, lambda=0.0) — STARTED ~23:25 UTC
+**Next task:** v23 (warmup=150k) — likely skip (advisor says null; cost drag is minority term)
 
-## Queue Status (as of 2026-09-06)
+## Decision: Why v29 (not v23/v27/v63)
+
+Advisor (Opus, 2026-09-06 session boundary A) rejected v23/v27/v63 and proposed v29:
+- **Root cause is beta gap, NOT costs.** Gross-of-cost mean outperf = -47pp; net = -72.74pp.
+  Costs are real (18.4% multiplicative drag, ~26pp) but the minority term.
+- **DD penalty is broken post-vecnorm-fix.** Mean penalty (-0.059 units/step) > mean equity
+  premium (+0.046 units/step). The reward function tells the policy that cash > equities.
+  This explains the observed 40.3% average realized exposure across the panel.
+- **v27 premise refuted.** Only 5.6% of trades are below the 0.1*hmax deadband threshold.
+  The agent makes large all-in/all-out swings, not tiny nibbles.
+- **v29 = single-character change.** `self._dd_lambda = 1.0 → 0.0` in IntegerTradingEnv.__init__.
+  Otherwise byte-identical to v18. No reward normalization issue (norm_reward=False).
+
+## Queue Status
 
 | Variant | Status | Result |
 |---------|--------|--------|
 | v19 (B&H-relative reward) | DONE | -71.92pp — null vs v18 -72.74pp |
 | v20 (best-by-Sharpe) | DONE | -71.58pp — null vs v18 -72.74pp |
 | v21 (target-exposure) | DONE | -73.16pp — null vs v18 -72.74pp |
-| v23 (warmup=150k) | **IN PROGRESS** | task bi26mq8a8, ~23:30 UTC finish |
-| v63 (obs-noise regularizer) | **QUEUED** | Rl_v63.py fetched, ready to run |
-| v22 (ensemble seeds) | SKIPPED | needs active policy first |
+| v23 (warmup=150k) | SKIP (advisor: null, wrong lever) | — |
+| v29 (DD penalty removed) | **IN PROGRESS** | est. finish ~1:45 UTC |
+| v63 (obs-noise) | SKIP (advisor: wrong lever) | — |
+| v28 (turnover penalty) | QUEUED if v29 shows exposure is not binding | — |
 
-## Correct v18 Baseline (canonical)
+## Correct v18 Baseline (canonical, run-b 2026-09-05)
 
 | Stock | Outperf | Sharpe | Trades | B&H Return |
 |-------|---------|--------|--------|-----------|
@@ -34,39 +48,42 @@ Last updated: 2026-09-06T21:40:00Z
 | HINDALCO | -200.74pp | -0.292 | 181 | +178.12% |
 | **Mean** | **-72.74pp** | +0.013 | 84.3 | +98.04% |
 
-## Cost-Drag Finding (Confirmed 2026-09-06, Opus advisor)
+## Key Insights from Opus Advisor (2026-09-06)
 
-Transaction costs average **15.2% of initial capital** across the panel.
-ITC 31.4%, RELIANCE 27.5%, SBIN 20.3%. Win rates are 56-87% but costs eat all gains.
-Root cause: NOT reward shaping or overfit — it's **excessive turnover**.
+### Beta gap is the dominant failure term (~47pp of 73pp gap)
+- Mean exposure across panel = 40.3% (policy prefers cash)
+- After removing cost drag: gross-of-costs mean outperf = -47pp
+- TATAMOTORS: gross outperf still -156pp (not a cost problem)
 
-Corrected v27 proposal: action deadband (`|action| < 0.1*hmax → 0`) + min-hold 3 bars.
-(See NEEDS_HUMAN.md for implementation details)
+### DD penalty makes cash > equities in reward
+- Mean reward for holding equity: +0.046 units/step
+- Mean DD penalty for holding equity: -0.059 units/step
+- Net: -0.013 units/step per step of holding (cash = 0.0)
+- Spearman ρ(net reward drift, exposure) = 0.55 (0.77 ex-TATAMOTORS)
 
-## v23 Completion Steps (CRITICAL for next session)
+### v27 (deadband) premise refuted
+- Median trade size = 0.50-0.88 * hmax (large all-in/all-out swings)
+- Only 5.6% of trades below 0.1*hmax threshold
+- Only 1.2% of transaction costs from sub-threshold trades
+- Deadband removes ~1% of cost drag, not 50-70%
 
-When task bi26mq8a8 completes (or use fallback at 23:20 UTC trigger trig_017Kka4QRfXPGR5b8DhErRtu):
-1. Run analytics:
+## v29 Completion Steps (for next session if incomplete)
+
+1. Resume: `python run_panel.py v29` (resume guard handles already-done stocks)
+2. After completion, run analytics:
    ```bash
-   python summarize_results.py results_v23
-   python significance.py results_v23
-   python baselines.py results_v23
+   python summarize_results.py results_v29
+   python significance.py results_v29
+   python baselines.py results_v29
    ```
-2. Key diagnostic: TATAMOTORS trades count. If >20, warmup fix worked.
-3. Compare mean vs v18 clean (-72.74pp). If >5pp better with active policies = progress.
-4. Write results_v23/READOUT.md
-5. Commit + push all results
-6. ADVISOR CONSULT (second boundary — before PR update): spawn Opus advisor with v23 results
-7. Update PR #3 (mcp__github__update_pull_request owner=guitaristsam repo=rl_ppo_nifty50 pull_number=3)
-8. Start v63 panel: `python run_panel.py v63` (background task)
-
-## v63 Details
-
-- Fetched from `origin/auto/research:Rl_v63.py` (auto-research drafted, ast-clean, 63 ins/3 del vs v18)
-- Single variable: additive Gaussian obs-noise sigma=0.1 on NORMALIZED train observations
-- Anti-overfit regularizer: "v63 jitters ALL features by small amount, post-normalization"
-- Auto-research ranked: priority 3 (after v61 market-breadth, v62 action-repeat)
-- Expected runtime: same as v23, ~140 min for full panel
+3. Key diagnostics:
+   - Mean realized exposure per stock (compare to v18's 40.3%)
+   - TATAMOTORS trades count (if >20: beta fix working)
+   - Median outperf (not just mean — TATAMOTORS/HINDALCO dominate mean)
+4. Write results_v29/READOUT.md with RATCHET check vs v18 (-72.74pp)
+5. ADVISOR CONSULT (second boundary — before PR update)
+6. Commit + push all results
+7. Update/create PR
 
 ## Setup Commands for Fresh Session
 
@@ -95,16 +112,8 @@ with open(path, 'w') as f:
     f.write("from __future__ import annotations\ntry:\n    from finrl.test import test\nexcept Exception:\n    pass\n")
 print('finrl patched')
 PATCH
-
-# If v63 not present, fetch from research branch
-git show origin/auto/research:Rl_v63.py > Rl_v63.py 2>/dev/null && echo "v63 fetched"
 ```
 
-## Key Insights
-- Correct v18 baseline = -72.74pp (NOT -38.78pp)
-- v19/v20/v21 were all null results (within ±1.2pp of v18)
-- Cost drag = root cause (15.2% avg, not reward or overfit)
-- TATAMOTORS degeneracy (-258pp, 5 trades) dominates mean outperf
-- v27 = action deadband (NOT start-fully-invested — that was wrong)
-- FRONTIER.md champion section needs updating (auto-tinker job)
-- v63 = obs-noise regularizer, ready to run
+## Impl Files on Branch
+
+- `Rl_v29.py`: committed, byte-identical to v18 except lambda=0 + version comment
