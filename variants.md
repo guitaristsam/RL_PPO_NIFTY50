@@ -2321,3 +2321,280 @@ difference is the test read-out).
 ensembles give ~1/K action-estimate variance reduction: Averaged-DQN (variance reduction by
 averaging), https://arxiv.org/pdf/1611.01929 ; ensemble RL for variance reduction / robustness,
 https://arxiv.org/pdf/2001.05209 .
+
+---
+
+# Batch v68–v72 — activation/Lipschitz regularization + stationary inputs (advisor-gated, 2026-09-06)
+
+Single-variable forks of the current champion **v18** (v26/feature-reduction and the 22-indicator
+proxy are still INVALIDATED cash-hold artifacts per FRONTIER — do NOT anchor to them). This batch
+was ranked by an independent opus advisor at session start. It is deliberately built on the ONE
+piece of real empirical signal the run/tinker screens have produced: **symmetric capacity
+reduction (lstm_hidden+net_arch 128→64) was the only single-variable change that beat baseline**
+(+9 to +12pp, still under gate). The advisor's framing: the diagnostics pin the **critic** as the
+overfitter (EV 0.95–0.99 on train, poor test; val decays past 100k), so attack effective capacity
+and input covariate-shift *directly* on the regularization axis — where v55–v57 only moved the
+*width* axis and did so symmetrically across both heads.
+
+Advisor priority: **v68 (LayerNorm) ≈ v69 (critic-only capacity) > v70 (frac-diff, highest
+ceiling) > v71 (spectral norm) > v72 (CVaR, HOLD).** Two ideas were considered and **rejected**
+this session (see the "Considered and rejected" note at the end of this batch) so no future
+session re-drafts them: actor/recurrent LSTM dropout (PPO-unsafe) and potential-based reward
+shaping (policy-invariant ⇒ inert, or misspecified ⇒ a v19 duplicate).
+
+---
+
+## Rl_v68.py — LayerNorm in the actor-critic network (activation normalization)  [QUEUE, top-tier]
+
+**Anchor.** Fork of **v18**. Single variable: insert LayerNorm into the policy/value network
+(the post-LSTM MLP extractor and the LSTM *output*). Everything else — features, reward, selector,
+hyperparameters, LSTM size — byte-identical to v18.
+
+**Hypothesis.** The measured symptom is a memorizing critic (train EV pegged 0.95–0.99, val curve
+peaks ~100k then decays). LayerNorm is the single most robustly-supported intervention in the
+recent plasticity-loss / RL-generalization literature for exactly this signature: it keeps
+activation scales bounded as the on-policy data distribution drifts, prevents the effective
+learning-rate blow-up and dormant-neuron accumulation that accompany critic overfit, and does so
+**without shrinking weight magnitudes** — so it is mechanistically *distinct from the rejected
+L2/weight regularization* (which biases parameters toward zero and collapsed clip_fraction in
+v10/v11). It sits on this project's one real empirical signal (capacity reduction helped) but on
+the regularization axis instead of the width axis, and it is distinct from VecNormalize (which
+normalizes the *observation input*, not internal *activations* — nothing in v19–v67 touches
+activation normalization).
+
+**Honest prior (do not over-hope).** The literature is explicit that LayerNorm reliably fixes
+*training-time* plasticity but is **inconsistent on generalization on its own** — the clean wins
+come when it is combined with a regenerative/shrink-perturb regularizer (Lyle et al. 2024). So the
+realistic expected outcome is "critic EV finally drops below 0.99 and val stops decaying," which
+is a *necessary* precondition for the later levers even if test P&L does not jump on this change
+alone. That diagnostic movement is itself the deliverable.
+
+**Code change (single variable vs v18: activation normalization).**
+- Subclass `MlpLstmPolicy` (sb3-contrib `RecurrentActorCriticPolicy`) and inject `nn.LayerNorm`
+  into the MLP extractor and after the LSTM output projection, then pass the subclass as the
+  policy to `RecurrentPPO` in `train_ppo_model` (~Rl_v18.py:785). `policy_kwargs` unchanged
+  otherwise (lstm_hidden_size=128, net_arch=[128], Tanh).
+- **Feasibility (advisor):** LayerNorm on the MLP extractor and on the LSTM *output* is a small
+  custom-policy edit. LayerNorm *inside the LSTM recurrence* would need a custom LSTM cell (SB3
+  uses `nn.LSTM`) — do NOT do that; the cheap extractor+output version captures most of the
+  benefit and keeps this a true single variable. Reward/features/selector all v18.
+
+**How to run.** `python run_panel.py v68` (full panel; read the train-EV and val-curve
+diagnostics first, P&L second).
+
+**Diagnostic / caveat.**
+- **Primary read:** does train critic EV drop below v18's 0.95–0.99 *and* does the post-100k val
+  decay flatten? That is the intended effect; a P&L lift is a bonus, not the acceptance test.
+- **Guardrail:** watch `clip_fraction` and policy `std`. LayerNorm should NOT collapse clip_frac
+  (that was the L2/DSR failure); if it does, the insertion point is wrong (e.g. normalizing the
+  action pre-logits) — move it off the action head.
+- **Acceptance:** a genuine active policy (≥20 trades/stock) scored by the v37 exposure-adjusted
+  selector, beating v18. INFY / HDFCBANK (the clearest overfit casualties) are priority reads.
+
+**Sources.** Lyle et al., "Normalization and effective learning rates in RL," NeurIPS 2024,
+https://proceedings.neurips.cc/paper_files/paper/2024/file/c04d37be05ba74419d2d5705972a9d64-Paper-Conference.pdf ;
+Juliani & Ash, "A Study of Plasticity Loss in On-Policy Deep RL" (PPO), NeurIPS 2024,
+https://proceedings.neurips.cc/paper_files/paper/2024/file/ce7984e36d58659211a8dc7d5457cd6f-Paper-Conference.pdf ;
+"Plasticity Loss in Deep RL: A Survey," https://arxiv.org/html/2411.04832v3 .
+
+---
+
+## Rl_v69.py — asymmetric critic-only capacity (shrink the value head only)  [QUEUE, top-tier — strongest new lever]
+
+**Anchor.** Fork of **v18**. Single variable: give the **value (critic) head less capacity than
+the policy (actor) head** via SB3's dict `net_arch`, leaving the actor untouched. Everything else
+byte-identical to v18.
+
+**Hypothesis.** This is the most literal possible response to the project's own diagnostic. The
+critic is the overfitter (EV 0.95–0.99 while the actor's test behavior is poor), yet every
+capacity lever tried so far (v55/v56/v57) shrinks the actor **and** critic *symmetrically*.
+Shrinking only the value head reduces the critic's ability to memorize per-episode training
+returns — which is what EV→0.99 measures — while preserving the actor's expressiveness to still
+represent a good trading policy. It is distinct from v55–v57 (symmetric shrink) and from v68
+(normalization, not width). The advisor ranked this at parity with v68 as the cheapest high-value
+experiment on the board (a one-line `net_arch` change).
+
+**Code change (single variable vs v18: asymmetric head width).**
+- `Rl_v18.py:777` `net_arch: [128]` → `net_arch: {"pi": [128], "vf": [64]}` (SB3 dict form;
+  actor width unchanged at 128, critic MLP head halved to 64). `lstm_hidden_size` stays 128 for
+  both (do not also change the LSTM — that would be a second variable, and v57 already probes the
+  LSTM locus).
+- **Optional PPO-safe stack (a *second*, separately-run one-variable fork, not combined here):**
+  dropout on the **value net only**. This is the salvageable, PPO-safe core of the rejected
+  actor/recurrent-dropout idea — the PPO importance ratio and entropy depend solely on the actor,
+  so value-net dropout cannot corrupt them, and it directly regularizes the overfitting critic.
+  Keep it as its own run (v69-b) so the width change and the dropout change stay isolated.
+
+**How to run.** `python run_panel.py v69` (full panel).
+
+**Diagnostic / caveat.**
+- **Primary read:** does critic EV fall below 0.99 **without** the actor degrading (trade count
+  stays ≥20/stock, actions stay varied)? If the actor collapses to cash, the critic starvation
+  went too far — try `"vf":[96]` before `[64]`.
+- **Acceptance:** genuine active policy beating v18 under the v37 selector.
+- Keep to ONE change: width OR value-dropout, not both in the same run.
+
+**Sources.** Value-function overfit as the RL generalization bottleneck & spectral/normalization
+control of the critic: Bjorck et al., "Towards Deeper Deep RL with Spectral Normalization,"
+NeurIPS 2021, https://arxiv.org/abs/2106.01151 ; SB3 `net_arch` dict form (per-head width),
+https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html ;
+"Normalization and effective learning rates in RL," NeurIPS 2024 (critic-side effect),
+https://proceedings.neurips.cc/paper_files/paper/2024/file/c04d37be05ba74419d2d5705972a9d64-Paper-Conference.pdf .
+
+---
+
+## Rl_v70.py — fractional differentiation of the price channel (stationary, memory-preserving)  [QUEUE — highest ceiling]
+
+**Anchor.** Fork of **v18**. Single variable: replace/augment the raw price channel with its
+**fractionally-differentiated** transform — a real differencing order `d*∈(0,1)` (not d=0 raw
+price, not d=1 returns) that renders the series stationary while retaining maximum long memory.
+Applied ONLY to the price/close channel (optionally volume); the ~98 oscillator indicators are
+untouched. Reward, selector, hyperparameters all v18.
+
+**Hypothesis.** This attacks the *cause* the other levers only treat downstream. The train window
+is a specific price/vol regime (the 2020–21 bull) and RobustScaler is fit on train, so raw-price
+and price-level features on the later test slice extrapolate *outside the fitted range* — a
+textbook covariate-shift generator, and a direct route for the critic to key on a price level it
+never sees again. Integer differencing to returns (v47's d=1) removes the non-stationarity but
+also destroys the memory/level information; fractional differencing (López de Prado, AFML ch. 5)
+finds the minimum `d*` that passes an ADF stationarity test while keeping the series highly
+correlated with the original — stationary-but-memory-preserving inputs shrink the shift *at the
+source*. Distinct from v47 (returns = d=1, memory destroyed) and v50 (rolling-norm rescales but
+keeps the level's non-stationary structure). The advisor rated it the most on-target lever of the
+batch for a *generalization* gap specifically, at the cost of a slightly larger (pipeline) edit.
+
+**Code change (single variable vs v18: frac-diff the price channel).**
+- Add a causal fixed-width fractional-differencing helper (FFD: fixed backward window of binomial
+  weights `w_k = -w_{k-1}(d-k+1)/k`, truncated when `|w_k|<τ`) and produce a `close_ffd` column
+  (and optionally `volume_ffd`), appended to `list_of_indicators` (~Rl_v18.py:88). FFD is causal
+  by construction (only past bars enter each value).
+- **Fix `d*` on the TRAIN slice only** — binary-search the smallest `d` whose `close_ffd` passes
+  ADF on the train prefix, then apply that fixed `d*` to val and test (choosing `d` on the full
+  series is a leak). Keep the price channel; the FFD column is an *added* stationary view.
+- Because this touches `list_of_indicators`, the `.py` draft MUST add `"Rl_v70"` to the explicit
+  version list in `test_indicator_audit.py` (~line 48) AND pass `test_indicator_causality.py`
+  (FFD is causal, so the train-prefix value must equal the full-series value — this is the exact
+  invariant that test checks). Do NOT introduce any known-leakage name.
+
+**How to run.** `python run_panel.py v70` (full panel; then `python test_indicator_causality.py`
+with `CAUSALITY_SYMBOL=RELIANCE` to confirm the FFD column is causal).
+
+**Diagnostic / caveat.**
+- **Primary read (same as v26/v55):** does train EV finally drop below 0.99 and do val curves
+  stop decaying past 100k? A frac-diff price view should reduce test-slice extrapolation.
+- **Leakage guard is mandatory:** d* chosen on train only; causality test must pass. If it fails,
+  the FFD window is peeking (bug in the weight truncation or a centered window) — fix before any
+  panel read.
+- **Keep it single-variable:** frac-diff the price channel only, not all 98 indicators (most are
+  already oscillator-stationary; broadcasting muddies the experiment). `d*` and `τ` are part of
+  the ONE change; a `d` sweep is the follow-up, each still one variable vs v18.
+
+**Sources.** López de Prado, *Advances in Financial Machine Learning*, ch. 5 "Fractionally
+Differentiated Features," https://www.oreilly.com/library/view/advances-in-financial/9781119482086/c05.xhtml ;
+"Fractional differentiation and its use in machine learning," Springer,
+https://link.springer.com/article/10.1007/s12572-021-00299-5 ;
+Hudson & Thames implementation notes, https://hudsonthames.org/fractional-differentiation/ .
+
+---
+
+## Rl_v71.py — spectral normalization of the policy/value MLP (Lipschitz control)  [QUEUE — below v68/v69]
+
+**Anchor.** Fork of **v18**. Single variable: wrap the linear layers of the actor-critic MLP with
+`torch.nn.utils.spectral_norm` (bound each layer's largest singular value), leaving width, LSTM,
+reward, features, and selector at v18.
+
+**Hypothesis.** Spectral normalization constrains the network's **Lipschitz constant** — its
+sensitivity to input perturbations — which is precisely the quantity that blows up under the
+train→test covariate shift this project has. Mechanistically it is distinct from both v68
+(LayerNorm rescales *activations*) and the rejected L2 (shrinks *weight magnitude*): it bounds the
+*gain* of each layer without forcing weights toward zero. In value-based RL, constraining the
+Lipschitz constant of the critic recovers much of the benefit of heavier machinery (Gogianu et
+al. 2021 lift C51 to Rainbow-level with a single spectrally-normalized layer) and stabilizes
+larger nets (Bjorck et al. 2021); the 2024 continual-learning work shows spectral *regularization*
+reduces hyperparameter sensitivity and prevents gradient/parameter explosion — the same
+overfit-critic axis as v68/v69.
+
+**Code change (single variable vs v18: spectral norm on MLP linears).**
+- In the custom policy, apply `spectral_norm` to the `nn.Linear` layers of the MLP extractor
+  (and, as the primary target, the **value** head). Do NOT apply it to the LSTM (custom cell
+  needed) or to the action mean/log-std head (can distort the policy distribution). One power
+  iteration per forward (SB3/PyTorch default) — negligible cost.
+- Everything else v18.
+
+**How to run.** `python run_panel.py v71` (full panel).
+
+**Diagnostic / caveat.**
+- **Honest risk (advisor):** it is regularization-family, so it carries nonzero risk of the
+  v10/v11 `clip_fraction`-collapse signature. Same guardrail: watch clip_fraction and std; if
+  they collapse, restrict spectral_norm to the value head only.
+- **Primary read:** critic EV below 0.99 and flatter val decay, with a genuine active policy.
+- **Ordering:** run AFTER v68/v69 confirm the normalization/Lipschitz axis is the right one; if
+  LayerNorm already fixes the EV/val diagnostic, spectral norm is a redundant second option, not a
+  stack (running both at once is two variables).
+
+**Sources.** Gogianu et al., "Spectral Normalisation for Deep RL: an Optimisation Perspective,"
+ICML 2021, https://proceedings.mlr.press/v139/gogianu21a/gogianu21a.pdf ;
+Bjorck et al., "Towards Deeper Deep RL with Spectral Normalization," NeurIPS 2021,
+https://arxiv.org/abs/2106.01151 ;
+"Learning Continually by Spectral Regularization," ICLR 2025,
+https://arxiv.org/pdf/2406.06811 .
+
+---
+
+## Rl_v72.py — DESIGN ONLY / HOLD — CVaR (expected-shortfall) downside reward penalty
+
+**Anchor.** Fork of **v18**. Single variable: replace v12/v18's fixed-threshold drawdown penalty
+term with a **CVaR (expected shortfall)** penalty — the mean of the worst-`k`% per-step returns
+over a rolling window — leaving the primary log-return reward, features, selector, and
+hyperparameters unchanged.
+
+**Hypothesis.** CVaR is a smarter member of the drawdown-penalty family than the fixed
+`λ·max(0, dd − 0.10)` term (Rl_v18.py:525): it penalizes the *tail* of the realized return
+distribution rather than a hand-picked 10% peak-to-trough threshold, so it adapts to each stock's
+volatility. Crucially it is **NOT the rejected Differential Sharpe Ratio**: CVaR = mean of the
+worst-k% of a rolling return window — no ratio and no `(B − A²)^{3/2}` denominator, so the DSR
+detonation mode (VL→85, clip_frac→1e-4) is structurally absent.
+
+**Why DESIGN ONLY / HOLD (advisor).** Be skeptical that this helps the *generalization* problem.
+The project's disease is failure-to-generalize and losing to trend, not excessive downside
+appetite. CVaR is a reward-*shape* change: at best it improves risk-adjusted *test* metrics
+(Sharpe, maxDD); it does not explain or fix the val decay after 100k. It also lands squarely in
+the v10/v11 trap zone — co-varying reward shape with the val-selection interaction. **Do not run
+it until a reward-side lever is demonstrably the bottleneck**, and if run, run it only AFTER
+v68–v71 so reward shape is not confounded with the normalization/capacity levers that the
+diagnostics actually point to.
+
+**Code change (single variable vs v18: penalty term only).**
+- Track a rolling deque of the last `N` per-step portfolio log-returns in the env; compute
+  `cvar = mean(sorted(returns)[:ceil(kN)])` (the worst `k`%, e.g. k=0.10, N=20); set
+  `reward = primary − λ · max(0, −cvar)` in place of the DD-penalty line (Rl_v18.py:525–527).
+  `λ`, `k`, `N` are the ONE change's constants.
+
+**Diagnostic to look for.** If ever run: does test Sharpe/maxDD improve *without* the val-return
+selector degenerating to cash-holds (the ≥20-trade gate must still pass)? Read train EV to
+confirm it is unchanged (this lever should not touch the generalization gap; if EV moves, the
+penalty is dominating the primary reward — λ too high).
+
+**Sources.** Risk-sensitive RL with CVaR (no exploding denominator), "Robust Risk-Sensitive RL
+with CVaR," https://arxiv.org/pdf/2405.01718 ; "Risk-Sensitive Reward-Free RL with CVaR," ICML
+2024, https://proceedings.mlr.press/v235/ni24c.html .
+
+---
+
+## Considered and REJECTED this session (2026-09-06) — do NOT re-draft without a materially different mechanism
+
+- **Actor / recurrent (variational) LSTM dropout.** Genuinely distinct from v27 (input masking)
+  and v63 (input noise) — Gal-Ghahramani dropout regularizes the recurrent hidden dynamics, not
+  the inputs — and distinct from the rejected L2 (multiplicative noise / implicit sub-network
+  ensemble, not weight shrinkage). **But it is PPO-unsafe in the policy net:** dropout makes the
+  acting distribution differ from the distribution re-evaluated in the loss, corrupting the PPO
+  importance ratio and the entropy term, and reproduces the same `clip_fraction`/`std` pathology
+  v10/v11 already showed. The ONE salvageable, PPO-safe piece — dropout on the **value net only**
+  (the ratio never sees the critic) — is captured as the optional v69-b stack, not here.
+- **Potential-based reward shaping (Ng 1999) toward trend-holding.** Disqualified on theory:
+  `F = γΦ(s') − Φ(s)` is *provably policy-invariant*, so it cannot change the learned policy at
+  the optimum — it only alters the optimization path, i.e. reaches the same overfit faster, which
+  is neutral-to-harmful given the disease is overfitting-at-convergence gated by val early-stop.
+  The only way it "helps" is by misspecifying the potential (non-zero terminal potential / not a
+  true difference form), at which point it is no longer policy-invariant and is simply
+  **v19 (B&H-relative reward) in disguise**. Either inert or a duplicate — dropped.
