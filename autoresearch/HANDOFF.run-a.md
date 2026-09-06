@@ -1,21 +1,23 @@
 # HANDOFF — auto-run-A
 
-Last updated: 2026-09-05T21:14 UTC
+Last updated: 2026-09-06T21:14 UTC
 
 ## Current task
-v20 full 10-stock panel — IN PROGRESS
+v22 full 10-stock panel — STARTING NOW (ensemble seeds, 3 per stock)
 
-Advisor (session-start, 2026-09-05) recommended v20 over v22:
-- v22 (ensemble) reduces variance but not bias; 2/10 win rate is bias-limited
-- v20 (val Sharpe selection) directly targets the documented failure mode (INFY/TATAMOTORS overfit)
-- v20 ~3h vs v22 ~10h
+## Previous completed tasks
+- v19 panel: COMPLETE — CLEAR LOSS (-72.38pp vs v18 -38.78pp). See results_v19/READOUT.md
+- v20 panel: COMPLETE — CLEAR LOSS (-69.10pp vs v18 -38.78pp). See results_v20/READOUT.md
+  - ADANIENT win = degenerate (6 trades)
+  - Lost ITC (+40pp→-91pp) and TATAMOTORS (-24pp→-213pp)
+  - Val-Sharpe selection picks inactivity optima
 
-## v19 Panel Result (previous session — COMPLETE)
-v18 PRODUCTION CHAMPION at -38.78pp mean outperf.
-v19 = -72.38pp mean outperf. CLEAR LOSS. 0/10 beats B&H.
-See results_v19/READOUT.md for full analysis.
+## v18 PRODUCTION CHAMPION baseline (10-stock panel)
+- Mean outperf: **-38.78pp** (computed from results/)
+- Note: FRONTIER.md says -63.2pp but that's the 50-stock sweep. 10-stock = -38.78pp.
+- Beats B&H: 2/10 (ITC +40pp, ADANIENT +67pp)
 
-## Progress (v20 panel)
+## Progress (v22 panel)
 - [ ] RELIANCE
 - [ ] INFY
 - [ ] TATAMOTORS
@@ -27,11 +29,12 @@ See results_v19/READOUT.md for full analysis.
 - [ ] AXISBANK
 - [ ] HINDALCO
 
-Resume guard: results_v20/{STOCK}/{STOCK}_report.txt — delete to re-run
+Command: `python run_panel.py v22 --seeds 3`
+(3 seeds per stock, saves to results_v22/, models_v22/)
+Resume guard: results_v22/{STOCK}/{STOCK}_report.txt — delete to re-run
 
-## Next session task (if v20 incomplete)
-Resume: `python run_panel.py v20` (resume guard handles already-done stocks)
-Or use wrapper: run_v20_with_commits.sh in scratchpad
+## Next session task (if v22 incomplete)
+Resume: `python run_panel.py v22 --seeds 3` (resume guard handles already-done stocks)
 
 ## Critical install steps (fresh session)
 ```bash
@@ -54,10 +57,14 @@ if old in content:
 "
 ```
 
-## After v20 panel completes
-1. python summarize_results.py results_v20
-2. python significance.py results_v20
-3. python baselines.py results_v20
-4. Write results_v20/READOUT.md with verdict vs v18 (-38.78pp baseline)
+## After v22 panel completes
+1. python summarize_results.py results_v22
+2. python significance.py results_v22
+3. python baselines.py results_v22
+4. Write results_v22/READOUT.md with verdict vs v18 (-38.78pp baseline)
 5. ADVISOR STEP (pre-PR boundary)
-6. Open PR to main
+6. Open/update PR to main
+
+## PR status
+- PR to main: open (check with mcp__github__list_pull_requests)
+- Branch: auto/run-a
