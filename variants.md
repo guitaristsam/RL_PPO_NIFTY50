@@ -3019,3 +3019,243 @@ behind the v68/v69 normalization results — not before.
 NeurIPS 2021, https://proceedings.neurips.cc/paper/2021/file/2b38c2df6a49b97f706ec9148ce48d86-Paper.pdf ;
 Laskin et al., "Reinforcement Learning with Augmented Data" (RAD), NeurIPS 2020,
 https://arxiv.org/pdf/2004.14990 .
+
+---
+
+# Batch v80–v83 — discount-regularization + EXOGENOUS-INFORMATION forks from the v18 CHAMPION (2026-09-07, auto/research)
+
+Anchored to the empirical proxy screen (`log.md`) + an independent opus advisor (session-start,
+2026-09-07). The screen's ONLY positive-but-sub-gate signals are all the SAME mechanism —
+shrink effective capacity / shorten the credit horizon (capacity 128→64 = v55; gamma 0.99→0.95
+twice at +5pp; LR-decay = v31). The advisor's verdict: **proximate cause = overfit via excess
+effective capacity; ROOT cause = signal ceiling.** Shrink levers only reclaim *variance* around a
+near-zero-mean edge and are mathematically incapable of clearing the +25.69pp proxy gate (best
+observed ≈ +12pp) — dumb SMA/momentum already match PPO, the tell of a ceiling, not a tuning,
+problem. **Only new EXOGENOUS information can lift the ceiling.** This batch therefore banks the
+one cheap consolidation lever (v80) and then spends its design budget on genuinely exogenous,
+self-contained, look-ahead-safe feature forks (v81, v82) that are DISTINCT from every queued
+feature variant, plus one honest-caveat endogenous fork (v83).
+
+**Anti-stack rule (advisor, explicit).** v80 (gamma), v55 (capacity-64), and v31 (LR-decay) are
+ONE mechanism. Do NOT combine them in a single fork — combined they over-shrink toward the
+cash-only degenerate policy (the same failure as "remove DD penalty" / fully-invested-start that
+already lost). One shrink lever per fork; keep them parallel, never stacked.
+
+**Meta-steer for the RUN routines (advisor, headline).** The highest-EV moves are ALREADY
+written and UNRUN: the exogenous-feature drafts **v51** (cross-sectional relative-strength),
+**v60** (India VIX), **v61** (market breadth), and the **v19** B&H-relative reward. Prioritize
+EXECUTING those over drafting more. This batch's v81/v82 are the *next* exogenous levers once
+those are consumed — not ahead of them.
+
+---
+
+## Rl_v80.py — discount factor gamma 0.99 → 0.97 (discount-as-regularizer)  [DRAFTED, UNRUN, AST-clean]
+
+**Hypothesis.** The proxy screen's most reproducible hyperparameter signal (after capacity) is
+gamma 0.99→0.95 (+5pp, twice; `log.md` ITC-6 / ITC-24), with a note that "0.97 is the better
+sweet spot." Discount reduction is not a random knob: a shorter effective planning horizon
+**restricts the class of representable optimal policies**, i.e. it is a *regularizer* (Jiang et
+al. 2015; Amit et al. ICML 2020). That is exactly the same overfit-control mechanism the screen
+already rewards via capacity-64 (v55) — which is *why* both help. gamma=0.97 ⇒ effective horizon
+~1/(1−0.97)=33 bars (~1.5 trading months) vs ~100 bars at 0.99: still long enough to credit
+multi-week swing structure, short enough to stop the critic memorizing full-episode paths (EV
+pegs 0.95–0.99 today). 0.97 is chosen over 0.95 to sit between the observed +5pp signal and the
+0.99 baseline — the least aggressive shrink consistent with the data.
+
+**Code change** (single variable vs Rl_v18.py — the discount, nothing else).
+- `PPO_PARAMS["gamma"]` 0.99 → 0.97 (`Rl_v18.py:761`).
+- BOTH `VecNormalize(..., gamma=...)` sites move with it (train wrapper `Rl_v18.py:738`; val-eval
+  wrapper `Rl_v18.py:670`) — SB3's return-normalization discount must match the agent's gamma or
+  the reward running-stats are computed on a different discount than the returns being optimized.
+  These three are the SAME discount; changing them together keeps this single-variable.
+- Everything else byte-identical to v18. No `list_of_indicators` change ⇒ no audit/causality edit.
+- **DRAFTED as `Rl_v80.py`** (copy of v18, only the three gamma sites + a header banner differ;
+  verified by diff). `python run_panel.py v80` works via importlib. UNRUN.
+
+**How to run.** `python run_panel.py v80`  (full 10-stock panel; also cheap on the 3-stock proxy).
+
+**Diagnostic to look for.**
+- Training-curve `explained_variance` should finish BELOW v18's 0.95–0.99 if the shorter horizon
+  is genuinely shrinking the fittable class. If EV still pegs at ~0.99, the critic is overfitting
+  time-of-episode structure the discount doesn't touch (→ the ceiling story, not capacity).
+- Trade count must stay ≥ 20/stock. A collapse toward cash = over-shrink; if so, 0.97 is already
+  too low and the discount lever is spent (do NOT then also stack capacity-64 / LR-decay).
+- **Target stocks:** RELIANCE, ITC, HDFCBANK (the proxy panel where the +5pp gamma signal was
+  measured) — confirm the proxy signal survives to the full split.
+
+**Honest scope.** LOW ceiling. The advisor rates this HIGH-confidence / LOW-payoff: bank it as
+consolidation on top of whatever else wins, but it will NOT clear the gate alone. It is a
+necessary-not-sufficient variance reducer, not an alpha source.
+
+**Sources.** Amit, Meir, Ciosek, "Discount Factor as a Regularizer in Reinforcement Learning,"
+ICML 2020, https://proceedings.mlr.press/v119/amit20a/amit20a.pdf ; Jiang, Kulesza, Singh, Lewis,
+"The Dependence of Effective Planning Horizon on Model Accuracy," AAMAS 2015 (lower planning
+discount controls policy-class complexity, improving generalization under model error).
+
+---
+
+## Rl_v81.py — market/idiosyncratic RETURN DECOMPOSITION features (self-contained factor split)  [DESIGN — advisor's #1 EV lever this batch]
+
+**Why this is the headline.** The advisor's single highest-EV recommendation: the only lever that
+adds genuinely *exogenous* information. v18's 98-column observation is otherwise 98 self-referential
+transforms of ONE price series — a 99th transform has near-zero marginal EV. This fork splits the
+stock's own daily return into its **systematic (market) component** and its **idiosyncratic
+(excess/alpha) component** and hands the policy both — information it currently cannot see.
+
+**Distinct from every queued feature variant.** v30 = a binary market-above-200DMA *bit*; v40 = a
+SLOW index 200-DMA *trend-state* level (and BLOCKED on an index CSV the repo lacks); v51 = a
+cross-sectional *rank*; v44 = a vague design-only "regime vector." NONE of them decompose the
+stock's *contemporaneous daily return* into market + idiosyncratic. v81 is that decomposition, and
+unlike v40 it needs **no external index file** — the market factor is the equal-weight panel mean,
+built from the 50 CSVs already in `data/` (same self-contained trick v30/v51 use).
+
+**Resolving the known tension (honest).** A prior advisor flagged (v30 text) that a *raw*
+continuous index return is ~beta-collinear with the stock's own return → little orthogonal signal.
+That is precisely why v81 does NOT feed the raw index return alone: it feeds the **excess** return
+`r_stock − r_mkt` (the orthogonal, idiosyncratic part) as the alpha signal, and the market return
+`r_mkt` as the systematic context that lets the LSTM *separate* beta moves from alpha moves rather
+than conflating them. The decomposition is the value, not either column alone (a market-model /
+CAPM-style factor representation as features).
+
+**Code change** (single variable vs v18: +2 exogenous feature columns; observation 101 → 103).
+- New cached precompute (once per panel, like v51): build the market factor
+  `r_mkt[t] = mean over the fixed 50-name panel of log(close_i[t]/close_i[t−1])`, using the SAME
+  constituent set on every date (fix membership up front — no survivorship/composition drift; a
+  date is valid only once all constituents have a prior close). Strictly causal: `r_mkt[t]` uses
+  only closes at `t` and `t−1`.
+- In `process_stock`, date-align to the stock's frame and append TWO columns present identically
+  in train/val/test: (1) `MKT_LOGRET_1` = `r_mkt[t]`; (2) `EXCESS_LOGRET_1` =
+  `log(close[t]/close[t−1]) − r_mkt[t]`. Add both names to `list_of_indicators`.
+- Env, reward, selector, hyperparams unchanged.
+- **Audit/causality wiring** (like v51/v70): add the two names to `test_indicator_audit.py`'s
+  explicit version list handling and to `test_indicator_causality.py` (they are custom, not
+  pandas-ta, so the static known-leakage check passes trivially; the causality prefix-equality
+  test is the real guard — both columns are causal by construction, verify it).
+
+**Leakage caveat — the one to nail.** Building the panel over *today's* NIFTY50 membership would
+leak future index composition. Fix the constituent set to names present at the START of each
+stock's own train slice and hold it fixed through val/test; do NOT re-rank membership by later
+data. Same discipline v51's caveat spells out.
+
+**How to run.** `python run_panel.py v81`  (full panel — the excess-return signal should help most
+on names whose alpha diverges from the index: ADANIENT, TATAMOTORS, and the HDFCBANK "no within-
+asset winning policy" case that CLAUDE.md attributes to missing cross-asset context).
+
+**Diagnostic to look for.**
+- Does the policy's action distribution actually condition on `EXCESS_LOGRET_1` (e.g. hold/add
+  when idiosyncratic strength is positive)? If actions are invariant to both new columns, the
+  feature is ignored — dead weight, and evidence the ceiling is not a market-factor story.
+- Trade count ≥ 20/stock (this is a directional signal, not a risk-off gate, so it should NOT
+  manufacture a cash-hold — unlike a regime bit).
+- **Target stock:** HDFCBANK (the canonical "feature-untrainable" case) and ADANIENT.
+
+**Honest scope.** HIGHEST ceiling-lift potential of this batch, but the advisor's caveat stands:
+run the ALREADY-DRAFTED exogenous forks (v51/v60/v61) FIRST — v81 is the next exogenous lever once
+those are consumed, not ahead of them. If v51 (cross-sectional rank) already captures the
+cross-asset edge, v81's marginal value shrinks; the two are complementary (rank vs continuous
+factor) but should be measured in sequence, not stacked.
+
+**Sources.** George & Hwang, "The 52-Week High and Momentum Investing," Journal of Finance 2004,
+https://www.bauer.uh.edu/tgeorge/papers/gh4-paper.pdf (cross-sectional / anchoring context);
+market-model return decomposition (systematic vs idiosyncratic) is standard CAPM/factor practice;
+FinRL-DeepSeek risk-sensitive trading, https://arxiv.org/pdf/2502.07393 (exogenous signal
+augmentation lifting the ceiling in DRL trading).
+
+---
+
+## Rl_v82.py — sector-peer relative return (the third factor, orthogonal to stock AND broad market)  [DESIGN — advisor's explicit "missing add"]
+
+**Hypothesis.** The advisor named one exogenous lever not in the v-list: **sector context**.
+Equity returns decompose empirically into market + SECTOR + idiosyncratic. v81 supplies market and
+idiosyncratic; the sector factor is the orthogonal middle term neither v81 nor v51 (whole-universe
+rank) captures. A stock lagging its OWN sector while the sector leads the market is a distinct,
+tradable regime that self-referential indicators cannot express. NIFTY50 has clean sector blocks
+(banking, IT, auto, energy, FMCG, pharma, metals, …), so a sector-peer mean is well-defined.
+
+**Code change** (single variable vs v18: +1 exogenous feature column; observation 101 → 102).
+- Hardcode a fixed `SYMBOL → sector` map for the panel constituents (small dict; commit it in the
+  file so it is auditable and composition-stable). Precompute, per date, each sector's equal-weight
+  mean daily log-return `r_sector[t]` from the member CSVs (causal, `t`/`t−1` closes only).
+- In `process_stock`, append ONE column `SECTOR_EXCESS_LOGRET_1` =
+  `log(close[t]/close[t−1]) − r_sector[t]` (this stock's return in excess of its sector peers),
+  date-aligned, present identically in train/val/test. Add its name to `list_of_indicators`.
+- Env, reward, selector, hyperparams unchanged. Audit/causality wiring as in v81.
+
+**Why ONE column, not a vector.** Keep it single-variable and against the over-capacity grain: the
+sector-excess return is the orthogonal signal; adding raw sector level + beta + dispersion would be
+multi-variable and re-introduce overfit surface (the advisor's repeated warning). If v82 wins,
+decompose the locus in a gated follow-up.
+
+**How to run.** `python run_panel.py v82`  (full panel; strongest a-priori on names that diverge
+from their sector — private banks vs HDFCBANK, IT names vs INFY/TCS).
+
+**Diagnostic to look for.**
+- Split test by sign of `SECTOR_EXCESS_LOGRET_1`: does the policy behave differently when the stock
+  leads vs lags its sector? Invariance ⇒ ignored feature.
+- Trade count ≥ 20/stock; directional signal, should not manufacture cash-holds.
+- **Target stock:** HDFCBANK (banking sector), INFY/TCS (IT sector).
+
+**Honest scope / caveat.** Requires a hand-maintained sector map (small unattended-maintenance
+cost). Gated BEHIND v81: if the market/idiosyncratic split (v81) already lifts the ceiling, the
+sector term is the natural next decomposition; if v81 is inert, sector context is unlikely to
+help either (evidence the daily cross-asset factor structure is simply too weak at this horizon).
+
+**Sources.** Sector/industry momentum: Moskowitz & Grinblatt, "Do Industries Explain Momentum?",
+Journal of Finance 1999; standard 3-way market/sector/idiosyncratic return decomposition.
+
+---
+
+## Rl_v83.py — nearness to the trailing 252-day (52-week) high (anchoring / breakout trend feature)  [DESIGN — endogenous, honest caveats]
+
+**Hypothesis.** v18's documented failure mode (a): it makes money in absolute terms but loses to
+bull-trending buy-and-hold on strong-trend stocks — it sells into strength. The **52-week-high
+effect** (George & Hwang 2004) is one of the most replicated equity anomalies: proximity to the
+trailing 52-week high predicts continued outperformance and *subsumes* traditional price momentum,
+via a behavioral anchoring mechanism (investors underreact near prior highs). One column —
+`close[t] / max(close[t−252 … t]) ∈ (0,1]` — encodes exactly the "how close am I to breaking out"
+state the policy currently must reconstruct from raw MAs, and it maps directly onto the failure of
+selling below the high.
+
+**Code change** (single variable vs v18: +1 feature column; observation 101 → 102).
+- Append `NEAR_52W_HIGH` = `close[t] / rolling_max(close, 252)[t]` (trailing window, min_periods to
+  a full 252-bar burn-in; strictly causal — a trailing max, no center/forward window). Add its name
+  to `list_of_indicators`; audit/causality wiring as in v81 (a trailing rolling-max is provably
+  causal — the causality prefix-equality test is the guard).
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v83`  (full panel; target the strong-trend names where v18
+sold into bull runs — RELIANCE, TATAMOTORS).
+
+**Diagnostic to look for.**
+- Does exposure rise as `NEAR_52W_HIGH → 1` (agent learns to hold through breakouts)? That is the
+  intended behavior change on failure mode (a).
+- Trade count ≥ 20/stock; compare test outperformance on RELIANCE/TATAMOTORS vs v18.
+
+**Honest caveats (advisor, do NOT gloss over).** (1) This is ENDOGENOUS — price-only — so its
+marginal information over the existing 98 indicators (which already include MAs, ADX, PSAR-family
+trend proxies) is uncertain; the advisor rated it MEDIUM-HIGH, BELOW the exogenous v81/v82. (2) It
+attacks the SAME failure mode (a) as the already-drafted-but-UNRUN **v19** (B&H-relative reward).
+Single-variable discipline: **run v19 first**; if v19's reward-side attack already fixes the
+sell-into-strength behavior, a redundant feature-side fork is wasted. Draft/queue v83 only if v19
+runs and does NOT resolve failure mode (a).
+
+**Sources.** George & Hwang, "The 52-Week High and Momentum Investing," Journal of Finance 2004,
+https://www.bauer.uh.edu/tgeorge/papers/gh4-paper.pdf ; Alpha Architect summary,
+https://alphaarchitect.com/the-secret-to-momentum-is-the-52-week-high/ ; Quantpedia "52-Weeks High
+Effect in Stocks," https://quantpedia.com/strategies/52-weeks-high-effect-in-stocks .
+
+---
+
+## KILLED this session (advisor, do NOT draft) — record so nobody re-proposes
+
+- **Time-since-entry / holding-period STATE feature.** The RecurrentPPO LSTM hidden state ALREADY
+  encodes time-since-entry implicitly; an explicit holding-period column carries NO information
+  about whether holding is *correct*, so its only effect is to let the policy overfit a
+  holding-period heuristic to train paths. Failure mode (b) (selling out of pullbacks) is better
+  attacked from the reward side — already covered by v35 (turnover penalty) / v39 (inaction
+  penalty). Do NOT draft.
+- **Stacking the shrink levers** (v80 gamma-0.97 + v55 capacity-64 + v31 LR-decay) — one mechanism,
+  combining over-shrinks toward the cash-only degenerate (the v10/v11 combine-and-lose trap). Keep
+  parallel.
+- **More optimizer / trust-region micro-tweaks** — the optimizer seam is mined out (target_kl
+  contradicted; n_epochs / n_steps / batch_size / clip_range all lost). Sub-gate returns.
