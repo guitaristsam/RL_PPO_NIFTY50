@@ -1,0 +1,4 @@
+# cached pandas-ta AllStudy output per stock (deterministic; the slow step)
+.ta_cache/
+# per-experiment trained policies — not worth versioning
+models/
