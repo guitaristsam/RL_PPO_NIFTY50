@@ -90,7 +90,14 @@ Session added val_exp (mean val exposure fraction) to per-stock output. Advisor 
 
 | # | date (UTC) | change (one variable) | METRIC2 | METRIC | test | kept? | commit |
 |---|---|---|---|---|---|---|---|
-| ITC-32 | 2026-09-06 | activation_fn Tanh→ReLU (MLP layers use ReLU instead of Tanh) | **+5.684** | +5.684 | -14.636 | DISCARD (+14.878pp vs baseline; NEW BEST; under gate 25.69pp; val-test gap large — HDFCBANK +0.58pp val only; note: test col ignored per protocol) | — |
+| ITC-39 | 2026-09-07 | ent_coef 0.01→0.005 (halving entropy, more exploitation) | -32.355 | -41.024 | -14.656 | DISCARD (−23.2pp vs baseline; ent_coef=0.01 is optimal — less entropy collapses variance) | — |
+| ITC-38 | 2026-09-07 | learning_rate 3e-4→4e-4 (slightly faster convergence) | -30.522 | -102.538 | -25.808 | DISCARD (−21.3pp vs baseline; LR=3e-4 is optimal — higher LR causes instability) | — |
+| ITC-37 | 2026-09-06 | lstm_hidden_size 128→256 (larger LSTM temporal memory) | -25.271 | -48.728 | -29.362 | DISCARD (−16.1pp vs baseline; bigger LSTM causes more overfit at 60k; LSTM pattern: 128>256>32) | — |
+| ITC-36 | 2026-09-06 | clip_range 0.2→0.25 (wider trust region) | **-2.571** | -2.571 | -4.753 | DISCARD (+6.623pp vs baseline; directional HIT; val-test gap small ±2pp; clip_range pattern: 0.25>0.2>0.3) | — |
+| ITC-35 | 2026-09-06 | n_epochs 5→4 | -13.133 | -13.133 | -15.875 | DISCARD (−3.9pp vs baseline; n_epochs=5 is optimal — 4 and 3 worse, 10 very bad) | — |
+| ITC-34 | 2026-09-06 | gae_lambda 0.95→0.90 (shorter credit horizon) | -16.915 | -73.033 | -29.077 | DISCARD (−7.7pp vs baseline; 0.95 optimal — both shorter 0.80/0.90 and longer 0.98 are worse) | — |
+| ITC-33 | 2026-09-06 | learning_rate 3e-4→2e-4 | -30.404 | -95.758 | -29.512 | DISCARD (−21.2pp vs baseline; lower LR slows learning too much at 60k budget) | — |
+| ITC-32 | 2026-09-06 | activation_fn Tanh→ReLU (MLP layers use ReLU instead of Tanh) | **+5.684** | +5.684 | -14.636 | DISCARD (+14.878pp vs baseline; NEW BEST; under gate 25.69pp; directional HIT) | — |
 | ITC-31 | 2026-09-06 | gamma 0.99→0.98 | -20.612 | -69.971 | -26.513 | DISCARD (−11.4pp vs baseline; RELIANCE heavily penalized) | — |
 | ITC-30 | 2026-09-06 | gamma 0.99→0.96 | -20.333 | -46.729 | -33.233 | DISCARD (−11.1pp vs baseline; HDFCBANK +0.58pp is floor) | — |
 | ITC-29 | 2026-09-06 | gamma 0.99→0.97 (shorter discount horizon) | **+3.395** | +3.395 | -16.156 | DISCARD (+12.59pp vs baseline; under gate; directional HIT — best gamma value; sweet spot 0.97; pattern: 0.97>0.95>0.99>0.96>0.98) | — |
