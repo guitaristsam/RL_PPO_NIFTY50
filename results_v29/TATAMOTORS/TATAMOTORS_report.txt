@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR TATAMOTORS
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,530.56
+Total Return: 35.31%
+Annualized Return: 7.10%
+Volatility (Annualized): 20.36%
+Sharpe Ratio: 0.349
+Maximum Drawdown: -27.06%
+Trading Days: 1111
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹35,097.01
+Total Return: 250.97%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 35.31%
+Buy & Hold Return: 250.97%
+Outperformance: -215.66%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 148
+Buy Trades: 77
+Sell Trades: 71
+Total Transaction Costs: ₹2,822.19
+Average Cost per Trade: ₹19.07
+
+🎯 TRADING ACCURACY:
+Winning Trades: 51
+Losing Trades: 20
+Win Rate: 71.83%
+Total Closed Trades: 71

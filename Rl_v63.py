@@ -1,29 +1,3 @@
-"""
-v20: validation Sharpe instead of validation return.
-
-Hypothesis: v18's ValidationCallback selects the best checkpoint by total val
-return. That metric rewards big-DD bets that happened to land in the green on
-the val slice, but those policies often blow up on test (e.g. INFY at 200k in
-v18 — high val return came from a single late-window long that did not
-generalise). Sharpe ratio (mean / std of daily returns × sqrt(252)) penalises
-volatile equity curves that produce the same end-of-window return as a smoother
-one. Selecting by val Sharpe should filter out lucky-long val winners.
-
-Single-variable change: identical pipeline, identical reward, identical splits,
-identical hyperparameters. Only `_eval_on_val` records the daily-return array
-and returns a val Sharpe; the "best" comparison uses that Sharpe.
-
-Expected effect: more conservative checkpoint selection. INFY (-33pp regression
-in v12, persistent in v18) and TATAMOTORS (still -19% on a +338% bull) are the
-canonical cases. Diagnose by comparing val_sharpe-time-series against
-val_return-time-series in the eval_history log — if they pick different
-checkpoints, the hypothesis is in play.
-
-Why this beats v18 if successful: the val signal becomes risk-adjusted, which
-is closer to the test-time generalisation we actually care about. v18's val
-return is a noisy proxy; val Sharpe is a less noisy one.
-"""
-
 import os
 # Memory / thread caps — must be set BEFORE numpy / torch / TF import.
 # Heavy multi-threaded BLAS + multi-process pandas_ta workers were each
@@ -63,7 +37,7 @@ from typing import Optional, Dict, List
 from dataclasses import dataclass
 from sklearn.preprocessing import RobustScaler
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecEnvWrapper
 from sb3_contrib import RecurrentPPO  # v9: LSTM policy for temporal memory
 from stable_baselines3.common.callbacks import BaseCallback
 import copy  # v16: deep-copy VecNormalize running stats during validation
@@ -646,11 +620,7 @@ class ValidationCallback(BaseCallback):
         # policy was worse on val. warmup_steps=100k ensures the policy has
         # ~196 PPO updates of training before becoming eligible.
         self.warmup_steps = warmup_steps
-        # v20: select by val Sharpe instead of val return. best_sharpe replaces
-        # best_return as the comparison key. We still record val_return into
-        # eval_history for diagnostic purposes (so the log shows whether
-        # Sharpe-best and return-best diverge).
-        self.best_sharpe = -float('inf')
+        self.best_return = -float('inf')
         self.last_eval_step = 0
         self.eval_history = []
 
@@ -665,31 +635,27 @@ class ValidationCallback(BaseCallback):
                 print(f"  [val@{self.num_timesteps}] skipped (warmup ends at {self.warmup_steps})")
             return True
 
-        # v20: _eval_on_val now returns (val_return_pct, val_sharpe, val_trades).
-        # We select by val_sharpe; val_return is logged purely for diagnostic
-        # comparison in the eval_history.
-        val_return, val_sharpe, val_trades = self._eval_on_val()
-        self.eval_history.append((self.num_timesteps, val_return, val_sharpe, val_trades))
+        val_return, val_trades = self._eval_on_val()
+        self.eval_history.append((self.num_timesteps, val_return, val_trades))
 
         eligible = val_trades >= self.min_val_trades
-        if eligible and val_sharpe > self.best_sharpe:
-            self.best_sharpe = val_sharpe
+        if eligible and val_return > self.best_return:
+            self.best_return = val_return
             self.model.save(self.save_path)
             # Snapshot the live VecNormalize stats at checkpoint time so the
             # restored model is tested with the SAME obs normalisation it was
             # selected under (end-of-training stats differ from mid-training).
             self.train_vn.save(self.save_path.replace('.zip', '_vecnorm.pkl'))
             if self.verbose:
-                print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                      f"({val_return:+.2f}%, trades={val_trades}) — NEW BEST (saved)")
+                print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                      f"(trades={val_trades}) — NEW BEST (saved)")
         elif not eligible:
             if self.verbose:
-                print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                      f"({val_return:+.2f}%, trades={val_trades} < {self.min_val_trades}) — degenerate, skipped")
+                print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                      f"(trades={val_trades} < {self.min_val_trades}) — degenerate, skipped")
         elif self.verbose:
-            print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                  f"({val_return:+.2f}%, trades={val_trades}) "
-                  f"(best so far {self.best_sharpe:+.3f})")
+            print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                  f"(trades={val_trades}) (best so far {self.best_return:+.2f}%)")
         return True
 
     def _eval_on_val(self):
@@ -721,9 +687,6 @@ class ValidationCallback(BaseCallback):
         trade_count = 0
         done = False
         step_count = 0
-        # v20: record portfolio-value time series so we can compute val Sharpe.
-        # Initial value is just the env's starting capital.
-        portfolio_values = [float(self.initial_amount)]
         while not done and step_count < max_steps:
             action, lstm_states = self.model.predict(
                 obs, state=lstm_states,
@@ -741,30 +704,59 @@ class ValidationCallback(BaseCallback):
             # Count any per-stock position change as a trade event.
             trade_count += int(np.sum(cur_shares != prev_shares))
             prev_shares = cur_shares.copy()
-            # v20: snapshot the underlying env's total_asset every step for the
-            # daily-return series used to compute Sharpe.
-            cur_value = float(getattr(underlying, 'total_asset', self.initial_amount))
-            portfolio_values.append(cur_value)
             step_count += 1
 
         final_value = float(getattr(underlying, 'total_asset', self.initial_amount))
         val_return_pct = (final_value / self.initial_amount - 1.0) * 100.0
+        return val_return_pct, trade_count
 
-        # v20: compute val Sharpe = mean(daily_returns) / std(daily_returns) * sqrt(252).
-        # If std is 0 (e.g. near-cash policy with < 1e-6 daily return variance), use -inf so
-        # a barely-trading policy never beats a genuinely active but losing policy.
-        # min_val_trades handles truly 0-trade policies; this catches near-flat curves.
-        pv = np.asarray(portfolio_values, dtype=np.float64)
-        daily_returns = np.diff(pv) / np.maximum(pv[:-1], 1e-9)
-        std = float(np.std(daily_returns)) if len(daily_returns) else 0.0
-        # Floor the std: near-flat (mostly-cash) curves produce std ~ 1e-9 and
-        # astronomical Sharpe. Also require enough return observations.
-        if std < 1e-6 or len(daily_returns) < 20:
-            val_sharpe = -float('inf')
-        else:
-            val_sharpe = float(np.mean(daily_returns) / std * np.sqrt(252.0))
 
-        return val_return_pct, val_sharpe, trade_count
+# ============================================================================
+# v63 — UNRUN DRAFT. Single variable vs Rl_v18.py: additive Gaussian input-noise
+# injection during TRAINING ONLY (a data-space regularizer for the generalization
+# gap; critic EV pegs 0.95-0.99 on train, poor test). NOT run, NOT validated in
+# this research env (no torch/sb3 here). Everything else is byte-identical to v18:
+# features (106 indicators), reward (v12 log-return - DD), ValidationCallback,
+# hyperparameters, LSTM architecture. Distinct from the REJECTED weight/L2/reward
+# regularization (parameter/reward-space penalty) and from v27 feature-masking
+# (zeroes whole features); v63 jitters ALL features by a small amount, post-
+# VecNormalize, and only on the TRAIN env — val/test are clean/deterministic.
+# A run-routine MUST smoke-test that noise is train-only before a full panel run.
+# ============================================================================
+V63_OBS_NOISE_SIGMA = 0.1  # std of Gaussian noise on the normalized train obs
+
+
+class TrainObsNoiseWrapper(VecEnvWrapper):
+    """v63: additive Gaussian observation noise — TRAIN-ONLY data-space regularizer.
+
+    Placed OUTSIDE VecNormalize so the noise is added to the already-normalized
+    observation the policy consumes; a single global sigma is therefore scale-
+    consistent across the 106 heterogeneous features (calibration note: perturb
+    POST-normalization, not on raw indicator scales). VecNormalize's running-stat
+    updates happen in the inner wrapper, BEFORE noise is added, so they are
+    unaffected. Only the TRAIN env is wrapped; the ValidationCallback and
+    test_ppo_model build their envs without it, so evaluation stays deterministic
+    and unperturbed. sigma<=0 makes this an exact no-op (== v18).
+    """
+
+    def __init__(self, venv, sigma=V63_OBS_NOISE_SIGMA, seed=42):
+        super().__init__(venv)
+        self.sigma = float(sigma)
+        self._rng = np.random.default_rng(seed)
+
+    def reset(self):
+        return self._add_noise(self.venv.reset())
+
+    def step_wait(self):
+        obs, rewards, dones, infos = self.venv.step_wait()
+        return self._add_noise(obs), rewards, dones, infos
+
+    def _add_noise(self, obs):
+        if self.sigma <= 0.0:
+            return obs
+        obs = np.asarray(obs)
+        noise = self._rng.normal(0.0, self.sigma, size=obs.shape).astype(obs.dtype)
+        return obs + noise
 
 
 def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=200000,
@@ -838,8 +830,14 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
     print(f"  Creating RecurrentPPO model for {stock_name}...")
 
     try:
-        model_ppo = RecurrentPPO("MlpLstmPolicy", env_train, **PPO_PARAMS)
-        print(f"  RecurrentPPO model for {stock_name} created successfully")
+        # v63 single change: wrap ONLY the training env in the Gaussian obs-noise
+        # wrapper (outside VecNormalize). The model learns on noisy obs; the
+        # callback still receives the plain VecNormalize (env_train) for stat sync,
+        # and env_train is what gets returned/saved, so val/test stay unperturbed.
+        env_train_noisy = TrainObsNoiseWrapper(env_train, sigma=V63_OBS_NOISE_SIGMA)
+        model_ppo = RecurrentPPO("MlpLstmPolicy", env_train_noisy, **PPO_PARAMS)
+        print(f"  RecurrentPPO model for {stock_name} created successfully "
+              f"(v63 train obs-noise sigma={V63_OBS_NOISE_SIGMA})")
 
         # v16: build validation callback if a val_df was supplied. Periodic
         # deterministic eval on val data; saves best checkpoint.
@@ -877,9 +875,8 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
         # < min_val_trades). In that case best_path doesn't exist on disk and
         # we fall through using the final-iteration model — better than crashing.
         if best_path is not None and os.path.exists(best_path):
-            # v20: best metric is now Sharpe, not return.
-            best_sharpe = callbacks[0].best_sharpe
-            print(f"  Restoring best-val model (val_sharpe={best_sharpe:+.3f}) from {best_path}")
+            best_return = callbacks[0].best_return
+            print(f"  Restoring best-val model (val_return={best_return:+.2f}%) from {best_path}")
             # Restore the VecNormalize snapshot taken at checkpoint time, so
             # downstream vecnorm.save() persists the stats that match this model.
             best_vn_path = best_path.replace('.zip', '_vecnorm.pkl')
@@ -898,6 +895,12 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
                   f"Using final-iteration model instead.")
 
         print(f"  Training for {stock_name} completed successfully!")
+        # v63: detach the train-only noise wrapper from the model before returning,
+        # so nothing downstream (saving, test-time predict) ever sees noisy obs.
+        try:
+            model_ppo.set_env(env_train)
+        except Exception as _e:
+            print(f"  (v63) note: could not reset model env to plain VecNormalize: {_e}")
         return model_ppo, env_train, hmax_value
         
     except Exception as e:
@@ -1243,8 +1246,8 @@ def create_comprehensive_report(df_account_value, trade_logger, test_df, stock_n
         # policy whose "return" is just cash drift (HDFCBANK v16 false win).
         total_trades = trade_summary.get('total_trades', 0)
         if total_trades < 0.01 * len(test_df):
-            f.write(f"\n\u26a0\ufe0f DEGENERATE POLICY WARNING: only {total_trades} trades "
-                    f"over {len(test_df)} test rows \u2014 likely a do-nothing policy.\n")
+            f.write(f"\n⚠️ DEGENERATE POLICY WARNING: only {total_trades} trades "
+                    f"over {len(test_df)} test rows — likely a do-nothing policy.\n")
             print(f"  WARNING: degenerate policy for {stock_name} "
                   f"({total_trades} trades / {len(test_df)} test rows)")
     

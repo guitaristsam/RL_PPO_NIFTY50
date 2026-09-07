@@ -1,30 +1,12 @@
-"""
-v20: validation Sharpe instead of validation return.
-
-Hypothesis: v18's ValidationCallback selects the best checkpoint by total val
-return. That metric rewards big-DD bets that happened to land in the green on
-the val slice, but those policies often blow up on test (e.g. INFY at 200k in
-v18 — high val return came from a single late-window long that did not
-generalise). Sharpe ratio (mean / std of daily returns × sqrt(252)) penalises
-volatile equity curves that produce the same end-of-window return as a smoother
-one. Selecting by val Sharpe should filter out lucky-long val winners.
-
-Single-variable change: identical pipeline, identical reward, identical splits,
-identical hyperparameters. Only `_eval_on_val` records the daily-return array
-and returns a val Sharpe; the "best" comparison uses that Sharpe.
-
-Expected effect: more conservative checkpoint selection. INFY (-33pp regression
-in v12, persistent in v18) and TATAMOTORS (still -19% on a +338% bull) are the
-canonical cases. Diagnose by comparing val_sharpe-time-series against
-val_return-time-series in the eval_history log — if they pick different
-checkpoints, the hypothesis is in play.
-
-Why this beats v18 if successful: the val signal becomes risk-adjusted, which
-is closer to the test-time generalisation we actually care about. v18's val
-return is a noisy proxy; val Sharpe is a less noisy one.
-"""
-
 import os
+# v29: DD penalty removed (lambda=0). Single-variable change vs v18.
+# Hypothesis: v18's drawdown penalty (lambda=1.0) makes holding equities negative-EV
+# in the reward signal — mean penalty (-0.059 units/step) exceeds equity premium
+# (+0.046 units/step), so the optimal policy under this reward is to hold cash.
+# This drives the beta gap (~47pp of the 73pp mean outperformance gap vs B&H).
+# v12's DD penalty was validated against pre-vecnorm-fix code; this re-tests the
+# assumption post-fix. v29 = pure log-return reward (same as v9) + v18's warmup/val.
+#
 # Memory / thread caps — must be set BEFORE numpy / torch / TF import.
 # Heavy multi-threaded BLAS + multi-process pandas_ta workers were each
 # re-importing numpy/pandas/TF and busting the Windows page file.
@@ -445,7 +427,7 @@ class IntegerTradingEnv(StockTradingEnv):
         # tests a single hypothesis cleanly.
         self._equity_peak = float(self.initial_amount)
         self._dd_threshold = 0.10
-        self._dd_lambda    = 1.0
+        self._dd_lambda    = 0.0  # v29: zero out DD penalty (was 1.0 in v12/v18)
 
     def reset(self, *args, **kwargs):
         result = super().reset(*args, **kwargs)
@@ -646,11 +628,7 @@ class ValidationCallback(BaseCallback):
         # policy was worse on val. warmup_steps=100k ensures the policy has
         # ~196 PPO updates of training before becoming eligible.
         self.warmup_steps = warmup_steps
-        # v20: select by val Sharpe instead of val return. best_sharpe replaces
-        # best_return as the comparison key. We still record val_return into
-        # eval_history for diagnostic purposes (so the log shows whether
-        # Sharpe-best and return-best diverge).
-        self.best_sharpe = -float('inf')
+        self.best_return = -float('inf')
         self.last_eval_step = 0
         self.eval_history = []
 
@@ -665,31 +643,27 @@ class ValidationCallback(BaseCallback):
                 print(f"  [val@{self.num_timesteps}] skipped (warmup ends at {self.warmup_steps})")
             return True
 
-        # v20: _eval_on_val now returns (val_return_pct, val_sharpe, val_trades).
-        # We select by val_sharpe; val_return is logged purely for diagnostic
-        # comparison in the eval_history.
-        val_return, val_sharpe, val_trades = self._eval_on_val()
-        self.eval_history.append((self.num_timesteps, val_return, val_sharpe, val_trades))
+        val_return, val_trades = self._eval_on_val()
+        self.eval_history.append((self.num_timesteps, val_return, val_trades))
 
         eligible = val_trades >= self.min_val_trades
-        if eligible and val_sharpe > self.best_sharpe:
-            self.best_sharpe = val_sharpe
+        if eligible and val_return > self.best_return:
+            self.best_return = val_return
             self.model.save(self.save_path)
             # Snapshot the live VecNormalize stats at checkpoint time so the
             # restored model is tested with the SAME obs normalisation it was
             # selected under (end-of-training stats differ from mid-training).
             self.train_vn.save(self.save_path.replace('.zip', '_vecnorm.pkl'))
             if self.verbose:
-                print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                      f"({val_return:+.2f}%, trades={val_trades}) — NEW BEST (saved)")
+                print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                      f"(trades={val_trades}) — NEW BEST (saved)")
         elif not eligible:
             if self.verbose:
-                print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                      f"({val_return:+.2f}%, trades={val_trades} < {self.min_val_trades}) — degenerate, skipped")
+                print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                      f"(trades={val_trades} < {self.min_val_trades}) — degenerate, skipped")
         elif self.verbose:
-            print(f"  [val@{self.num_timesteps}] sharpe={val_sharpe:+.3f} "
-                  f"({val_return:+.2f}%, trades={val_trades}) "
-                  f"(best so far {self.best_sharpe:+.3f})")
+            print(f"  [val@{self.num_timesteps}] {val_return:+.2f}% "
+                  f"(trades={val_trades}) (best so far {self.best_return:+.2f}%)")
         return True
 
     def _eval_on_val(self):
@@ -721,9 +695,6 @@ class ValidationCallback(BaseCallback):
         trade_count = 0
         done = False
         step_count = 0
-        # v20: record portfolio-value time series so we can compute val Sharpe.
-        # Initial value is just the env's starting capital.
-        portfolio_values = [float(self.initial_amount)]
         while not done and step_count < max_steps:
             action, lstm_states = self.model.predict(
                 obs, state=lstm_states,
@@ -741,30 +712,11 @@ class ValidationCallback(BaseCallback):
             # Count any per-stock position change as a trade event.
             trade_count += int(np.sum(cur_shares != prev_shares))
             prev_shares = cur_shares.copy()
-            # v20: snapshot the underlying env's total_asset every step for the
-            # daily-return series used to compute Sharpe.
-            cur_value = float(getattr(underlying, 'total_asset', self.initial_amount))
-            portfolio_values.append(cur_value)
             step_count += 1
 
         final_value = float(getattr(underlying, 'total_asset', self.initial_amount))
         val_return_pct = (final_value / self.initial_amount - 1.0) * 100.0
-
-        # v20: compute val Sharpe = mean(daily_returns) / std(daily_returns) * sqrt(252).
-        # If std is 0 (e.g. near-cash policy with < 1e-6 daily return variance), use -inf so
-        # a barely-trading policy never beats a genuinely active but losing policy.
-        # min_val_trades handles truly 0-trade policies; this catches near-flat curves.
-        pv = np.asarray(portfolio_values, dtype=np.float64)
-        daily_returns = np.diff(pv) / np.maximum(pv[:-1], 1e-9)
-        std = float(np.std(daily_returns)) if len(daily_returns) else 0.0
-        # Floor the std: near-flat (mostly-cash) curves produce std ~ 1e-9 and
-        # astronomical Sharpe. Also require enough return observations.
-        if std < 1e-6 or len(daily_returns) < 20:
-            val_sharpe = -float('inf')
-        else:
-            val_sharpe = float(np.mean(daily_returns) / std * np.sqrt(252.0))
-
-        return val_return_pct, val_sharpe, trade_count
+        return val_return_pct, trade_count
 
 
 def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=200000,
@@ -877,9 +829,8 @@ def train_ppo_model(train_df, tech_indicators, stock_name, total_timesteps=20000
         # < min_val_trades). In that case best_path doesn't exist on disk and
         # we fall through using the final-iteration model — better than crashing.
         if best_path is not None and os.path.exists(best_path):
-            # v20: best metric is now Sharpe, not return.
-            best_sharpe = callbacks[0].best_sharpe
-            print(f"  Restoring best-val model (val_sharpe={best_sharpe:+.3f}) from {best_path}")
+            best_return = callbacks[0].best_return
+            print(f"  Restoring best-val model (val_return={best_return:+.2f}%) from {best_path}")
             # Restore the VecNormalize snapshot taken at checkpoint time, so
             # downstream vecnorm.save() persists the stats that match this model.
             best_vn_path = best_path.replace('.zip', '_vecnorm.pkl')
@@ -1243,8 +1194,8 @@ def create_comprehensive_report(df_account_value, trade_logger, test_df, stock_n
         # policy whose "return" is just cash drift (HDFCBANK v16 false win).
         total_trades = trade_summary.get('total_trades', 0)
         if total_trades < 0.01 * len(test_df):
-            f.write(f"\n\u26a0\ufe0f DEGENERATE POLICY WARNING: only {total_trades} trades "
-                    f"over {len(test_df)} test rows \u2014 likely a do-nothing policy.\n")
+            f.write(f"\n⚠️ DEGENERATE POLICY WARNING: only {total_trades} trades "
+                    f"over {len(test_df)} test rows — likely a do-nothing policy.\n")
             print(f"  WARNING: degenerate policy for {stock_name} "
                   f"({total_trades} trades / {len(test_df)} test rows)")
     

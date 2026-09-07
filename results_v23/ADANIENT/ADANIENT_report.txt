@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR ADANIENT
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹8,064.62
+Total Return: -19.35%
+Annualized Return: -7.57%
+Volatility (Annualized): 37.68%
+Sharpe Ratio: -0.201
+Maximum Drawdown: -58.81%
+Trading Days: 689
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹7,838.90
+Total Return: -21.61%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: -19.35%
+Buy & Hold Return: -21.61%
+Outperformance: 2.26%
+✅ PPO Strategy OUTPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 44
+Buy Trades: 23
+Sell Trades: 21
+Total Transaction Costs: ₹659.73
+Average Cost per Trade: ₹14.99
+
+🎯 TRADING ACCURACY:
+Winning Trades: 15
+Losing Trades: 6
+Win Rate: 71.43%
+Total Closed Trades: 21
