@@ -3259,3 +3259,83 @@ Effect in Stocks," https://quantpedia.com/strategies/52-weeks-high-effect-in-sto
   parallel.
 - **More optimizer / trust-region micro-tweaks** — the optimizer seam is mined out (target_kl
   contradicted; n_epochs / n_steps / batch_size / clip_range all lost). Sub-gate returns.
+
+---
+
+# Batch v84–v85 — a 2nd-moment exogenous feature + a selection-integrity lever (2026-09-07, auto/research)
+
+Two DISTINCT follow-ons, both LOWER priority than executing the existing exogenous backlog
+(v19/v51/v60/v61) and the v81/v82 headliners above — recorded so the direction isn't re-derived
+cold, NOT to jump the queue. Each is single-variable vs v18 and self-contained from the repo.
+
+---
+
+## Rl_v84.py — cross-sectional return DISPERSION as a market-wide regime feature (2nd moment)  [DESIGN — LOW priority, exogenous]
+
+**Hypothesis.** v81/v82 add first-moment factor context (mean market / sector return). The
+*second moment* of the cross-section — how widely the 50 names' daily returns are spread on a
+given date — is a separate, well-documented regime signal: high cross-sectional dispersion marks
+a stock-picking (idiosyncratic-opportunity) regime, low dispersion a macro-driven one (Gorman-
+Sapra-Weigand 2010; dispersion and VIX both forecast alpha dispersion). A single broadcast column
+tells every stock's policy WHICH regime it is trading in — orthogonal to the stock's own price and
+to the first-moment features, and it is a directional-opportunity signal, not a risk-off gate, so
+it should not manufacture a cash-hold.
+
+**Code change** (single variable vs v18: +1 exogenous column; observation 101 → 102).
+- Precompute per date `disp[t] = cross-sectional std over the fixed 50-name panel of daily log-
+  returns log(close_i[t]/close_i[t−1])` (same fixed-constituent / causal discipline as v81).
+- Append ONE broadcast column `XSEC_DISPERSION` (z-scored on the TRAIN slice only — fit the mean/std
+  on train, apply to val/test; no look-ahead) to every stock's frame. Add its name to
+  `list_of_indicators`; audit/causality wiring as v81.
+- Env, reward, selector, hyperparams unchanged.
+
+**How to run.** `python run_panel.py v84`.
+**Diagnostic.** Does exposure/activity rise in high-dispersion regimes? Invariance ⇒ ignored.
+**Target stock:** whole-panel effect; read HDFCBANK and the high-idiosyncratic names.
+**Honest scope.** LOW priority: a market-wide 2nd-moment scalar is a coarse signal, and the advisor
+ranks any single broadcast regime feature below the first-moment excess-return decomposition (v81).
+Gated behind v81; run only if v81 shows the cross-asset channel has signal at daily resolution.
+
+**Sources.** Gorman, Sapra, Weigand, "The Cross-Sectional Dispersion of Stock Returns, Alpha and
+the Information Ratio," Journal of Investing 2010, https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1444868 ;
+"In Pursuit of Alpha: Cross-Sectional Dispersion, Market Correlation" (Harvard),
+https://dash.harvard.edu/server/api/core/bitstreams/4d52364f-7420-486f-873b-9efc86f9f609/content .
+
+---
+
+## Rl_v85.py — Probabilistic-Sharpe-Ratio checkpoint selector (multiple-testing-aware selection)  [DESIGN — cheap insurance, selection axis]
+
+**Hypothesis.** v18 selects the best-val checkpoint by raw total return, which repeatedly picks
+degenerate lucky-long cash-holds (HDFCBANK, INFY). v20 (unrun) tries raw Sharpe. But the val
+callback evaluates SEVERAL checkpoints and keeps the max — a multiple-testing search whose winner's
+Sharpe is inflated by selection bias. The **Probabilistic Sharpe Ratio** (Bailey & López de Prado)
+scores a return series by the probability its true SR exceeds 0, correcting for sample length,
+skewness and kurtosis — exactly the inflation that makes a short lucky val window look good.
+Selecting by PSR instead of return (v18) or raw Sharpe (v20) should reject the fat-tailed
+lucky-long checkpoints that generalize worst.
+
+**Code change** (single variable vs v18: the val-selection METRIC only).
+- `significance.py` ALREADY implements PSR — reuse that exact function. In `ValidationCallback`,
+  replace the `best_return` comparison with a `best_psr`: `_eval_on_val()` records per-step val
+  portfolio values, computes daily returns, and scores PSR(returns, benchmark_SR=0). Keep the
+  `warmup_steps` and `min_val_trades` filters unchanged. Post-train restore = best-PSR checkpoint.
+- Env, reward, features, hyperparams unchanged. No `list_of_indicators` edit.
+
+**How to run.** `python run_panel.py v85`  (target the degenerate-selection casualties).
+**Diagnostic.** Does best-PSR pick a DIFFERENT (later, more-active) checkpoint than best-return on
+HDFCBANK/INFY? If it still selects the cash-hold, the degeneracy is upstream of selection (feature/
+reward), confirming the advisor's "selection is a filter, not a signal source."
+**Target stock:** HDFCBANK, INFY.
+
+**Honest scope.** Selection is a FILTER, not a ceiling-lifter (advisor: LOW-as-ceiling-mover) — it
+can at best make PPO reliably equal the best available checkpoint, which may still have no edge.
+But it is CHEAP (PSR already coded) and distinct from v20 (raw Sharpe), v37 (exposure-adjusted
+alpha) and v73 (train-val agreement) by adding the multiple-testing / non-normality correction. It
+also pairs naturally with v37 (score = exposure-adjusted alpha, ranked by PSR) as a future gated
+stack. Necessary insurance against degenerate picks; not a substitute for exogenous signal.
+
+**Sources.** Bailey & López de Prado, "The Deflated Sharpe Ratio: Correcting for Selection Bias,
+Backtest Overfitting and Non-Normality," Journal of Portfolio Management 2014,
+https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551 ; PSR: Bailey & López de Prado (2012).
+Backtest-overfitting model-selection context (Sharpe-based > return-based selection),
+https://arxiv.org/pdf/2209.05559 .
