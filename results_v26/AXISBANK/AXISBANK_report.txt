@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR AXISBANK
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹11,406.70
+Total Return: 14.07%
+Annualized Return: 4.95%
+Volatility (Annualized): 13.55%
+Sharpe Ratio: 0.366
+Maximum Drawdown: -22.20%
+Trading Days: 686
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,953.27
+Total Return: 49.53%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 14.07%
+Buy & Hold Return: 49.53%
+Outperformance: -35.47%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 53
+Buy Trades: 28
+Sell Trades: 25
+Total Transaction Costs: ₹1,045.35
+Average Cost per Trade: ₹19.72
+
+🎯 TRADING ACCURACY:
+Winning Trades: 16
+Losing Trades: 9
+Win Rate: 64.00%
+Total Closed Trades: 25

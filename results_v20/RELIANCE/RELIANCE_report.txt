@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR RELIANCE
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹11,075.87
+Total Return: 10.76%
+Annualized Return: 2.30%
+Volatility (Annualized): 6.68%
+Sharpe Ratio: 0.344
+Maximum Drawdown: -8.26%
+Trading Days: 1132
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹16,869.70
+Total Return: 68.70%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 10.76%
+Buy & Hold Return: 68.70%
+Outperformance: -57.94%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 31
+Buy Trades: 16
+Sell Trades: 15
+Total Transaction Costs: ₹610.62
+Average Cost per Trade: ₹19.70
+
+🎯 TRADING ACCURACY:
+Winning Trades: 12
+Losing Trades: 3
+Win Rate: 80.00%
+Total Closed Trades: 15

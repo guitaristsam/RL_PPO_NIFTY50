@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR HINDALCO
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹13,546.30
+Total Return: 35.46%
+Annualized Return: 7.00%
+Volatility (Annualized): 22.56%
+Sharpe Ratio: 0.310
+Maximum Drawdown: -33.58%
+Trading Days: 1131
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹27,149.80
+Total Return: 171.50%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 35.46%
+Buy & Hold Return: 171.50%
+Outperformance: -136.03%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 140
+Buy Trades: 68
+Sell Trades: 72
+Total Transaction Costs: ₹2,228.80
+Average Cost per Trade: ₹15.92
+
+🎯 TRADING ACCURACY:
+Winning Trades: 42
+Losing Trades: 30
+Win Rate: 58.33%
+Total Closed Trades: 72
