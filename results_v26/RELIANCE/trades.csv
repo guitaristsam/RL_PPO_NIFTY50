@@ -1,0 +1,2 @@
+trade_id,date,symbol,action,quantity,price,transaction_cost,total_value,portfolio_value,position_before,position_after
+1,2020-12-03,RELIANCE,Buy,11,891.54023447,24.517356447925,9806.94257917,9889.099859812077,0,11

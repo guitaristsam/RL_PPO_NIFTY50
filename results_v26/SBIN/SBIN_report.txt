@@ -1,0 +1,43 @@
+
+================================================================================
+COMPREHENSIVE TRADING PERFORMANCE REPORT FOR SBIN
+================================================================================
+
+📊 PPO STRATEGY PERFORMANCE
+----------------------------------------
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹14,503.79
+Total Return: 45.04%
+Annualized Return: 10.04%
+Volatility (Annualized): 16.83%
+Sharpe Ratio: 0.597
+Maximum Drawdown: -12.52%
+Trading Days: 979
+
+📈 BUY & HOLD STRATEGY PERFORMANCE
+----------------------------------------
+Strategy: Equal Weight Buy & Hold (integer shares, with costs)
+Initial Portfolio Value: ₹10,000.00
+Final Portfolio Value: ₹18,871.98
+Total Return: 88.72%
+
+🔄 STRATEGY COMPARISON
+----------------------------------------
+PPO Strategy Return: 45.04%
+Buy & Hold Return: 88.72%
+Outperformance: -43.68%
+❌ PPO Strategy UNDERPERFORMED Buy & Hold
+
+📋 TRADE SUMMARY & ACCURACY
+----------------------------------------
+Total Trades: 118
+Buy Trades: 59
+Sell Trades: 59
+Total Transaction Costs: ₹1,340.56
+Average Cost per Trade: ₹11.36
+
+🎯 TRADING ACCURACY:
+Winning Trades: 43
+Losing Trades: 16
+Win Rate: 72.88%
+Total Closed Trades: 59
